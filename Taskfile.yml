@@ -1,0 +1,22 @@
+version: "3"
+
+tasks:
+  up:
+    desc: "Start the full Dockerized stack in the background"
+    cmds:
+      - docker compose up -d
+
+  down:
+    desc: "Stop and remove all containers"
+    cmds:
+      - docker compose down
+
+  logs:
+    desc: "Follow the logs of all containers"
+    cmds:
+      - docker compose logs -f
+
+  rebuild:
+    desc: "Rebuild containers (use when adding new npm packages)"
+    cmds:
+      - docker compose build
