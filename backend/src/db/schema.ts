@@ -1,5 +1,11 @@
-import { pgTable, serial, varchar, timestamp, boolean } from "drizzle-orm/pg-core";
-import { InferSelectModel, InferInsertModel } from "drizzle-orm";
+import {
+  pgTable,
+  serial,
+  varchar,
+  timestamp,
+  boolean,
+} from "drizzle-orm/pg-core";
+import type { InferSelectModel, InferInsertModel } from "drizzle-orm";
 
 export const resources = pgTable("resources", {
   resourceId: varchar("resource_id", { length: 255 }).primaryKey(),
