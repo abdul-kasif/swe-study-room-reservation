@@ -12,4 +12,12 @@ export const ReservationCreateSchema = z
     path: ["endTime"],
   });
 
+export const ConfirmReservationParamsSchema = z.object({
+  id: z.coerce.number().int().positive(),
+});
+
 export type ReservationCreateDTO = z.infer<typeof ReservationCreateSchema>;
+
+export type ConfirmReservationParams = z.infer<
+  typeof ConfirmReservationParamsSchema
+>;
