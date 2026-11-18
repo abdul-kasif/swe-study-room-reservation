@@ -12,12 +12,19 @@ export const ReservationCreateSchema = z
     path: ["endTime"],
   });
 
+export type ReservationCreateDTO = z.infer<typeof ReservationCreateSchema>;
+
 export const ConfirmReservationParamsSchema = z.object({
   id: z.coerce.number().int().positive(),
 });
 
-export type ReservationCreateDTO = z.infer<typeof ReservationCreateSchema>;
-
 export type ConfirmReservationParams = z.infer<
   typeof ConfirmReservationParamsSchema
 >;
+
+export const ProcessApprovalBodySchema = z.object({
+  adminId: z.string().min(1),
+  decision: z.enum(["approve", "reject"]),
+});
+
+export type ProcessApprovalBody = z.infer<typeof ProcessApprovalBodySchema>;

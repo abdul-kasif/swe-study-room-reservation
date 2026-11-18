@@ -61,4 +61,80 @@ export class ReservationService {
 
     return reservation;
   }
+
+  async processApproval(
+    reservationId: number,
+    adminId: string,
+    decision: "approve" | "reject",
+    now: Date = new Date(),
+  ): Promise<ReservationDomain> {
+    const record = await this.repository.getById(reservationId);
+    if (!record) {
+      throw new ReservationNotFoundError("Reservation not found");
+    }
+
+    const reservation = new ReservationDomain(
+      record.id,
+      record.resourceId,
+      record.startTime,
+      record.endTime,
+      record.state,
+    );
+
+    reservation.ensureCanProcessApproval();
+
+    if (decision === "reject") {
+      reservation.reject();
+      await this.repository.tryTransition(
+        reservation.id,
+        "PENDING_APPROVAL",
+        reservation.state,
+        false,
+      );
+      return reservation;
+    }
+
+    if (reservation.isExpired(now)) {
+      reservation.markExpired();
+      await this.repository.tryTransition(
+        reservation.id,
+        "PENDING_APPROVAL",
+        reservation.state,
+        false,
+      );
+      throw new InvalidStateTransitionError(
+        "Approval expired: Start time has already passed; state set to CANCELLED",
+      );
+    }
+
+    const hasConflict = await this.repository.hasConfirmedOverlap(
+      reservation.resourceId,
+      reservation.startTime,
+      reservation.endTime,
+      reservation.id,
+    );
+
+    reservation.approve(hasConflict);
+
+    const applied = await this.repository.tryTransition(
+      reservation.id,
+      "PENDING_APPROVAL",
+      reservation.state,
+      true,
+    );
+
+    if (!applied) {
+      const current = await this.repository.getById(reservation.id);
+      if (current?.state !== "PENDING_APPROVAL") {
+        throw new InvalidStateTransitionError(
+          "Reservation state changed concurrently; please retry",
+        );
+      }
+      throw new ReservationConflictError(
+        "Conflict: Resource was already booked by another user",
+      );
+    }
+
+    return reservation;
+  }
 }

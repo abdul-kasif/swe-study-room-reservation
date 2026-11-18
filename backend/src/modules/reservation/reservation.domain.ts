@@ -35,6 +35,38 @@ export class ReservationDomain {
     this.state = requiresApproval ? "PENDING_APPROVAL" : "CONFIRMED";
   }
 
+  public ensureCanProcessApproval(): void {
+    if (this.state !== "PENDING_APPROVAL") {
+      throw new InvalidStateTransitionError(
+        "Only PENDING_APPROVAL reservations can be approved or rejected",
+      );
+    }
+  }
+
+  public reject(): void {
+    this.ensureCanProcessApproval();
+    this.state = "CANCELLED";
+  }
+
+  public isExpired(now: Date): boolean {
+    return now >= this.startTime;
+  }
+
+  public markExpired(): void {
+    this.ensureCanProcessApproval();
+    this.state = "CANCELLED";
+  }
+
+  public approve(hasConflict: boolean): void {
+    this.ensureCanProcessApproval();
+    if (hasConflict) {
+      throw new ReservationConflictError(
+        "Conflict: Resource was already confirmed for an overlapping slot",
+      );
+    }
+    this.state = "CONFIRMED";
+  }
+
   public static requiresAdminApproval(resourceId: string): boolean {
     return resourceId.startsWith("VIP_");
   }

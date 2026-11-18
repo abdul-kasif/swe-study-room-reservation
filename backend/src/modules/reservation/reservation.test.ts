@@ -99,3 +99,86 @@ describe("Reservation Vertical Slice: Confirmation", () => {
     expect(response.body.error).toBe("Validation Error");
   });
 });
+
+describe("Reservation Vertical Slice: VIP Approval", () => {
+  let pendingReservationId: number;
+
+  beforeEach(async () => {
+    await db.delete(reservations);
+    await db.delete(resources);
+
+    await db.insert(resources).values({
+      resourceId: "VIP_Room-A",
+      name: "VIP Room A",
+      isActive: true,
+    });
+
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const end = new Date(tomorrow);
+    end.setHours(end.getHours() + 2);
+
+    const inserted = await db
+      .insert(reservations)
+      .values({
+        resourceId: "VIP_Room-A",
+        userId: "TestUser2",
+        startTime: tomorrow,
+        endTime: end,
+        state: "PENDING_APPROVAL",
+      })
+      .returning();
+
+    pendingReservationId = inserted[0].id;
+  });
+
+  it("should approve a PENDING_APPROVAL reservation", async () => {
+    const response = await request(app)
+      .post(`/api/reservations/${pendingReservationId}/approval`)
+      .send({ adminId: "Admin1", decision: "approve" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.state).toBe("CONFIRMED");
+
+    const dbRecord = await db
+      .select()
+      .from(reservations)
+      .where(eq(reservations.id, pendingReservationId));
+    expect(dbRecord[0].state).toBe("CONFIRMED");
+  });
+
+  it("should reject a PENDING_APPROVAL reservation and set to CANCELLED", async () => {
+    const response = await request(app)
+      .post(`/api/reservations/${pendingReservationId}/approval`)
+      .send({ adminId: "Admin1", decision: "reject" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.state).toBe("CANCELLED");
+  });
+
+  it("should block approval if start time has passed (expiry)", async () => {
+    // ARRANGE: Set the start time to the past
+    const past = new Date();
+    past.setHours(past.getHours() - 2);
+    await db
+      .update(reservations)
+      .set({ startTime: past })
+      .where(eq(reservations.id, pendingReservationId));
+
+    // ACT
+    const response = await request(app)
+      .post(`/api/reservations/${pendingReservationId}/approval`)
+      .send({ adminId: "Admin1", decision: "approve" });
+
+    // ASSERT
+    expect(response.status).toBe(400);
+    expect(response.body.detail).toContain("Approval expired");
+
+    // Ensure the state actually transitioned to CANCELLED in the DB
+    const dbRecord = await db
+      .select()
+      .from(reservations)
+      .where(eq(reservations.id, pendingReservationId));
+    expect(dbRecord[0].state).toBe("CANCELLED");
+  });
+});
