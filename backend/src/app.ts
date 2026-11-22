@@ -4,6 +4,9 @@ import { errorHandler } from "./core/errors";
 import { ReservationController } from "./modules/reservation/reservation.controller";
 import { ReservationService } from "./modules/reservation/reservation.service";
 import { ReservationRepository } from "./modules/reservation/reservation.repository";
+import { AuthRepository } from "./modules/auth/auth.repository";
+import { AuthService } from "./modules/auth/auth.service";
+import { AuthController } from "./modules/auth/auth.controller";
 import { requireAdminAuth } from "./core/auth";
 
 const app = express();
@@ -15,6 +18,16 @@ app.use(
     origin: process.env.FRONTEND_URL || "http://localhost:5173",
   }),
 );
+
+const authRepo = new AuthRepository();
+const authService = new AuthService(authRepo);
+const authController = new AuthController(authService);
+
+const authRouter = express.Router();
+authRouter.post("/login", authController.login);
+authRouter.post("/register", authController.register);
+
+app.use("/api/auth", authRouter);
 
 const reservationRepo = new ReservationRepository();
 const reservationService = new ReservationService(reservationRepo);

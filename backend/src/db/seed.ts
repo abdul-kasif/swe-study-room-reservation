@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { db } from "./index";
-import { resources } from "./schema";
+import bcrypt from "bcryptjs";
+import { resources, users } from "./schema";
 
 const DEFAULT_RESOURCES = [
   { resourceId: "Room-A", name: "Standard Study Room A", isActive: true },
@@ -17,6 +18,33 @@ async function seed() {
     .insert(resources)
     .values(DEFAULT_RESOURCES)
     .onConflictDoNothing({ target: resources.resourceId });
+
+  const studentHash = await bcrypt.hash("student123", 10);
+  const adminHash = await bcrypt.hash("admin123", 10);
+
+  await db
+    .insert(users)
+    .values([
+      {
+        username: "student1",
+        fullName: "Alice Student",
+        passwordHash: studentHash,
+        role: "STUDENT",
+      },
+      {
+        username: "student2",
+        fullName: "Bob Student",
+        passwordHash: studentHash,
+        role: "STUDENT",
+      },
+      {
+        username: "admin1",
+        fullName: "Campus Admin",
+        passwordHash: adminHash,
+        role: "ADMIN",
+      },
+    ])
+    .onConflictDoNothing({ target: users.username });
 
   console.log(`Seed complete (${DEFAULT_RESOURCES.length} resources ensured).`);
 }
