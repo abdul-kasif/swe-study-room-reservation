@@ -24,6 +24,16 @@ export const reservations = pgTable("reservations", {
   state: varchar("state", { length: 50 }).default("DRAFT").notNull(),
 });
 
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  username: varchar("username", { length: 100 }).notNull().unique(),
+  fullName: varchar("full_name", { length: 255 }).notNull(),
+  passwordHash: varchar("password_hash", { length: 255 }).notNull(),
+  role: varchar("role", { length: 20 }).notNull(), // "STUDENT" | "ADMIN"
+});
+
+export type User = InferSelectModel<typeof users>;
+export type NewUser = InferInsertModel<typeof users>;
 export type Resource = InferSelectModel<typeof resources>;
 export type Reservation = InferSelectModel<typeof reservations>;
 export type NewReservation = InferInsertModel<typeof reservations>;

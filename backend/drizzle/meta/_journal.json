@@ -8,6 +8,13 @@
       "when": 1794911943695,
       "tag": "0000_steep_blizzard",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1795383417299,
+      "tag": "0001_tired_thor",
+      "breakpoints": true
     }
   ]
 }

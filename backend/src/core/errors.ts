@@ -49,6 +49,18 @@ export class UnauthorizedError extends DomainError {
   }
 }
 
+export class ForbiddenError extends DomainError {
+  constructor(message: string = "Forbidden: Insufficient permissions") {
+    super(message, 403);
+  }
+}
+
+export class UserAlreadyExistsError extends DomainError {
+  constructor(message: string = "Username is already taken") {
+    super(message, 409);
+  }
+}
+
 // Centralized Express Error Handler
 export const errorHandler = (
   err: Error,
