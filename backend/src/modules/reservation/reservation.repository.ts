@@ -102,4 +102,15 @@ export class ReservationRepository {
 
     return result.rowCount === 1;
   }
+
+  async cleanupExpired(now: Date): Promise<number> {
+    const result = await db.execute(sql`
+      UPDATE ${reservations}
+      SET state = 'CANCELLED'
+      WHERE state IN ('DRAFT', 'PENDING_APPROVAL')
+        AND start_time <= ${now}
+    `);
+
+    return result.rowCount ?? 0;
+  }
 }

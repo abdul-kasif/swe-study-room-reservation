@@ -106,4 +106,17 @@ export class ReservationController {
       next(error);
     }
   };
+
+  public cleanupExpired = async (
+    _req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const cancelledCount = await this.service.cleanupExpiredReservations();
+      res.status(200).json({ cancelledCount });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

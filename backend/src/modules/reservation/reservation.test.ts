@@ -5,6 +5,9 @@ import { db } from "../../db";
 import { reservations, resources } from "../../db/schema";
 import { eq } from "drizzle-orm";
 
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "test-admin-secret";
+process.env.ADMIN_TOKEN = ADMIN_TOKEN;
+
 describe("Reservation Vertical Slice: Create Reservation", () => {
   const tomorrowAt = (hour: number) => {
     const d = new Date();
@@ -223,6 +226,7 @@ describe("Reservation Vertical Slice: VIP Approval", () => {
   it("should approve a PENDING_APPROVAL reservation", async () => {
     const response = await request(app)
       .post(`/api/reservations/${pendingReservationId}/approval`)
+      .set("x-admin-token", ADMIN_TOKEN)
       .send({ adminId: "Admin1", decision: "approve" });
 
     expect(response.status).toBe(200);
@@ -238,6 +242,7 @@ describe("Reservation Vertical Slice: VIP Approval", () => {
   it("should reject a PENDING_APPROVAL reservation and set to CANCELLED", async () => {
     const response = await request(app)
       .post(`/api/reservations/${pendingReservationId}/approval`)
+      .set("x-admin-token", ADMIN_TOKEN)
       .send({ adminId: "Admin1", decision: "reject" });
 
     expect(response.status).toBe(200);
@@ -256,6 +261,7 @@ describe("Reservation Vertical Slice: VIP Approval", () => {
     // ACT
     const response = await request(app)
       .post(`/api/reservations/${pendingReservationId}/approval`)
+      .set("x-admin-token", ADMIN_TOKEN)
       .send({ adminId: "Admin1", decision: "approve" });
 
     // ASSERT
@@ -449,5 +455,92 @@ describe("Reservation Vertical Slice: Check Availability", () => {
 
     expect(response.status).toBe(422);
     expect(response.body.error).toBe("Validation Error");
+  });
+});
+
+describe("Reservation Vertical Slice: Admin Auth & Expired Cleanup", () => {
+  beforeEach(async () => {
+    await db.delete(reservations);
+    await db.delete(resources);
+
+    await db.insert(resources).values([
+      { resourceId: "Room-A", name: "Standard Room A", isActive: true },
+      { resourceId: "VIP_Room-A", name: "VIP Room A", isActive: true },
+    ]);
+  });
+
+  it("should reject requests with missing or invalid admin token with 401", async () => {
+    const missing = await request(app)
+      .post("/api/admin/cleanup-expired")
+      .send();
+    expect(missing.status).toBe(401);
+    expect(missing.body.error).toBe("UnauthorizedError");
+
+    const wrong = await request(app)
+      .post("/api/admin/cleanup-expired")
+      .set("x-admin-token", "wrong-token")
+      .send();
+    expect(wrong.status).toBe(401);
+  });
+
+  it("should atomically cancel stale DRAFT and PENDING_APPROVAL bookings without touching future or CONFIRMED ones", async () => {
+    const pastStart = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const pastEnd = new Date(Date.now() - 1 * 60 * 60 * 1000);
+    const futureStart = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const futureEnd = new Date(Date.now() + 26 * 60 * 60 * 1000);
+
+    await db.insert(reservations).values([
+      // Should be cancelled (stale DRAFT)
+      {
+        resourceId: "Room-A",
+        userId: "U1",
+        startTime: pastStart,
+        endTime: pastEnd,
+        state: "DRAFT",
+      },
+      // Should be cancelled (stale PENDING_APPROVAL)
+      {
+        resourceId: "VIP_Room-A",
+        userId: "U2",
+        startTime: pastStart,
+        endTime: pastEnd,
+        state: "PENDING_APPROVAL",
+      },
+      // Should remain CONFIRMED (past CONFIRMED)
+      {
+        resourceId: "Room-A",
+        userId: "U3",
+        startTime: pastStart,
+        endTime: pastEnd,
+        state: "CONFIRMED",
+      },
+      // Should remain DRAFT (future DRAFT)
+      {
+        resourceId: "Room-A",
+        userId: "U4",
+        startTime: futureStart,
+        endTime: futureEnd,
+        state: "DRAFT",
+      },
+    ]);
+
+    const response = await request(app)
+      .post("/api/admin/cleanup-expired")
+      .set("x-admin-token", ADMIN_TOKEN)
+      .send();
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ cancelledCount: 2 });
+
+    const all = await db.select().from(reservations);
+    const statesByUser = Object.fromEntries(
+      all.map((r) => [r.userId, r.state]),
+    );
+    expect(statesByUser).toEqual({
+      U1: "CANCELLED",
+      U2: "CANCELLED",
+      U3: "CONFIRMED",
+      U4: "DRAFT",
+    });
   });
 });

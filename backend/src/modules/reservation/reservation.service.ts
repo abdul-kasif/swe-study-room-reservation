@@ -252,4 +252,8 @@ export class ReservationService {
 
     return hasOverlap ? "UNAVAILABLE" : "AVAILABLE";
   }
+
+  async cleanupExpiredReservations(now: Date = new Date()): Promise<number> {
+    return this.repository.cleanupExpired(now);
+  }
 }

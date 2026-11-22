@@ -41,12 +41,20 @@ export class DailyQuotaExceededError extends DomainError {
   }
 }
 
+export class UnauthorizedError extends DomainError {
+  constructor(
+    message: string = "Unauthorized: Invalid or missing admin token",
+  ) {
+    super(message, 401);
+  }
+}
+
 // Centralized Express Error Handler
 export const errorHandler = (
   err: Error,
-  req: Request,
+  _req: Request,
   res: Response,
-  next: NextFunction,
+  _next: NextFunction,
 ): void => {
   if (err instanceof DomainError) {
     res.status(err.statusCode).json({ error: err.name, detail: err.message });
