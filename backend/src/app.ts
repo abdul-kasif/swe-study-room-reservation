@@ -13,12 +13,14 @@ const reservationController = new ReservationController(reservationService);
 
 const reservationRouter = express.Router();
 
+app.use("/api/reservations", reservationRouter);
+
 reservationRouter.post("/", reservationController.create);
 reservationRouter.post("/:id/confirm", reservationController.confirm);
 reservationRouter.post("/:id/approval", reservationController.processApproval);
 reservationRouter.post("/:id/cancel", reservationController.cancel);
 
-app.use("/api/reservations", reservationRouter);
+app.post("/api/availability", reservationController.checkAvailability);
 
 app.use(errorHandler);
 

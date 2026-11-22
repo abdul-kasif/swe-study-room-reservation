@@ -6,7 +6,10 @@ import {
   ReservationConflictError,
   ResourceNotFoundError,
 } from "../../core/errors";
-import type { CreateReservationBody } from "./reservation.schema";
+import type {
+  CheckAvailabilityBody,
+  CreateReservationBody,
+} from "./reservation.schema";
 
 export class ReservationService {
   constructor(private readonly repository: ReservationRepository) {}
@@ -228,5 +231,25 @@ export class ReservationService {
     }
 
     return reservation;
+  }
+
+  async checkAvailability(
+    dto: CheckAvailabilityBody,
+  ): Promise<"AVAILABLE" | "UNAVAILABLE"> {
+    const resource = await this.repository.getResourceById(dto.resourceId);
+    if (!resource || !resource.isActive) {
+      throw new ResourceNotFoundError(
+        `Resource '${dto.resourceId}' does not exist or is inactive`,
+      );
+    }
+
+    // 2. Check for any overlapping CONFIRMED reservation
+    const hasOverlap = await this.repository.hasConfirmedOverlap(
+      dto.resourceId,
+      dto.startTime,
+      dto.endTime,
+    );
+
+    return hasOverlap ? "UNAVAILABLE" : "AVAILABLE";
   }
 }

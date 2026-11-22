@@ -352,3 +352,102 @@ describe("Reservation Vertical Slice: Cancel Reservation", () => {
     expect(response.body.error).toBe("ReservationNotFoundError");
   });
 });
+
+describe("Reservation Vertical Slice: Check Availability", () => {
+  const tomorrowAt = (hour: number) => {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() + 1);
+    d.setUTCHours(hour, 0, 0, 0);
+    return d;
+  };
+
+  beforeEach(async () => {
+    await db.delete(reservations);
+    await db.delete(resources);
+
+    await db.insert(resources).values([
+      { resourceId: "Room-A", name: "Standard Room A", isActive: true },
+      { resourceId: "Room-Closed", name: "Closed Room", isActive: false },
+    ]);
+  });
+
+  it("should return AVAILABLE when no CONFIRMED reservation overlaps", async () => {
+    // Seed a DRAFT reservation — drafts should not block availability
+    await db.insert(reservations).values({
+      resourceId: "Room-A",
+      userId: "Student1",
+      startTime: tomorrowAt(10),
+      endTime: tomorrowAt(12),
+      state: "DRAFT",
+    });
+
+    const response = await request(app)
+      .post("/api/availability")
+      .send({
+        resourceId: "Room-A",
+        startTime: tomorrowAt(10).toISOString(),
+        endTime: tomorrowAt(12).toISOString(),
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ status: "AVAILABLE" });
+  });
+
+  it("should return UNAVAILABLE when a CONFIRMED reservation overlaps, and AVAILABLE for adjacent slots", async () => {
+    await db.insert(reservations).values({
+      resourceId: "Room-A",
+      userId: "Student1",
+      startTime: tomorrowAt(10),
+      endTime: tomorrowAt(12),
+      state: "CONFIRMED",
+    });
+
+    // Overlapping window (11:00 - 13:00)
+    const overlap = await request(app)
+      .post("/api/availability")
+      .send({
+        resourceId: "Room-A",
+        startTime: tomorrowAt(11).toISOString(),
+        endTime: tomorrowAt(13).toISOString(),
+      });
+    expect(overlap.status).toBe(200);
+    expect(overlap.body).toEqual({ status: "UNAVAILABLE" });
+
+    // Adjacent window (12:00 - 14:00) — half-open [start, end) does not conflict
+    const adjacent = await request(app)
+      .post("/api/availability")
+      .send({
+        resourceId: "Room-A",
+        startTime: tomorrowAt(12).toISOString(),
+        endTime: tomorrowAt(14).toISOString(),
+      });
+    expect(adjacent.status).toBe(200);
+    expect(adjacent.body).toEqual({ status: "AVAILABLE" });
+  });
+
+  it("should return 404 for an inactive or missing resource", async () => {
+    const response = await request(app)
+      .post("/api/availability")
+      .send({
+        resourceId: "Room-Closed",
+        startTime: tomorrowAt(10).toISOString(),
+        endTime: tomorrowAt(12).toISOString(),
+      });
+
+    expect(response.status).toBe(404);
+    expect(response.body.error).toBe("ResourceNotFoundError");
+  });
+
+  it("should return 422 when startTime >= endTime", async () => {
+    const response = await request(app)
+      .post("/api/availability")
+      .send({
+        resourceId: "Room-A",
+        startTime: tomorrowAt(12).toISOString(),
+        endTime: tomorrowAt(10).toISOString(),
+      });
+
+    expect(response.status).toBe(422);
+    expect(response.body.error).toBe("Validation Error");
+  });
+});

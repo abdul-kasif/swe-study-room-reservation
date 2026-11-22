@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { ReservationService } from "./reservation.service";
 import {
+  CheckAvailabilityBodySchema,
   ConfirmReservationParamsSchema,
   CreateReservationBodySchema,
   ProcessApprovalBodySchema,
@@ -86,6 +87,21 @@ export class ReservationController {
         id: cancelled.id,
         state: cancelled.state,
       });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public checkAvailability = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const dto = CheckAvailabilityBodySchema.parse(req.body);
+      const status = await this.service.checkAvailability(dto);
+
+      res.status(200).json({ status });
     } catch (error) {
       next(error);
     }

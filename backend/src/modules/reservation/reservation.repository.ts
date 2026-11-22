@@ -48,20 +48,23 @@ export class ReservationRepository {
     resourceId: string,
     startTime: Date,
     endTime: Date,
-    excludeId: number,
+    excludeId?: number,
   ): Promise<boolean> {
+    const conditions = [
+      eq(reservations.resourceId, resourceId),
+      eq(reservations.state, "CONFIRMED"),
+      sql`${reservations.startTime} < ${endTime}`,
+      sql`${reservations.endTime} > ${startTime}`,
+    ];
+
+    if (excludeId !== undefined) {
+      conditions.push(sql`${reservations.id} != ${excludeId}`);
+    }
+
     const result = await db
       .select({ id: reservations.id })
       .from(reservations)
-      .where(
-        and(
-          eq(reservations.resourceId, resourceId),
-          eq(reservations.state, "CONFIRMED"),
-          sql`${reservations.id} != ${excludeId}`,
-          sql`${reservations.startTime} < ${endTime}`,
-          sql`${reservations.endTime} > ${startTime}`,
-        ),
-      )
+      .where(and(...conditions))
       .limit(1);
 
     return result.length > 0;
