@@ -5,6 +5,94 @@ import { db } from "../../db";
 import { reservations, resources } from "../../db/schema";
 import { eq } from "drizzle-orm";
 
+describe("Reservation Vertical Slice: Create Reservation", () => {
+  const tomorrowAt = (hour: number) => {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() + 1);
+    d.setUTCHours(hour, 0, 0, 0);
+    return d.toISOString();
+  };
+
+  beforeEach(async () => {
+    await db.delete(reservations);
+    await db.delete(resources);
+
+    await db.insert(resources).values([
+      { resourceId: "Room-A", name: "Standard Room A", isActive: true },
+      { resourceId: "Room-Closed", name: "Closed Room", isActive: false },
+    ]);
+  });
+
+  it("should create a DRAFT reservation and return 201 Created", async () => {
+    const response = await request(app)
+      .post("/api/reservations")
+      .send({
+        resourceId: "Room-A",
+        userId: "Student1",
+        startTime: tomorrowAt(10),
+        endTime: tomorrowAt(12),
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.state).toBe("DRAFT");
+    expect(response.body.id).toBeTypeOf("number");
+  });
+
+  it("should reject booking an inactive or missing resource with 404", async () => {
+    const response = await request(app)
+      .post("/api/reservations")
+      .send({
+        resourceId: "Room-Closed",
+        userId: "Student1",
+        startTime: tomorrowAt(10),
+        endTime: tomorrowAt(12),
+      });
+
+    expect(response.status).toBe(404);
+    expect(response.body.error).toBe("ResourceNotFoundError");
+  });
+
+  it("should enforce the 4-hour daily quota across multiple bookings", async () => {
+    // First 3-hour booking succeeds
+    const first = await request(app)
+      .post("/api/reservations")
+      .send({
+        resourceId: "Room-A",
+        userId: "Student1",
+        startTime: tomorrowAt(8),
+        endTime: tomorrowAt(11),
+      });
+    expect(first.status).toBe(201);
+
+    // Second 2-hour booking on the same day exceeds 4 hours -> 400
+    const second = await request(app)
+      .post("/api/reservations")
+      .send({
+        resourceId: "Room-A",
+        userId: "Student1",
+        startTime: tomorrowAt(12),
+        endTime: tomorrowAt(14),
+      });
+
+    expect(second.status).toBe(400);
+    expect(second.body.error).toBe("DailyQuotaExceededError");
+  });
+
+  it("should reject invalid intervals where startTime >= endTime with 422", async () => {
+    const response = await request(app)
+      .post("/api/reservations")
+      .send({
+        resourceId: "Room-A",
+        userId: "Student1",
+        startTime: tomorrowAt(12),
+        endTime: tomorrowAt(10),
+      });
+
+    expect(response.status).toBe(422);
+    expect(response.body.error).toBe("Validation Error");
+  });
+});
+
 describe("Reservation Vertical Slice: Confirmation", () => {
   let testReservationId: number;
 

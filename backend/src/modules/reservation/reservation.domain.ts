@@ -1,4 +1,5 @@
 import {
+  DailyQuotaExceededError,
   InvalidStateTransitionError,
   ReservationConflictError,
 } from "../../core/errors";
@@ -69,5 +70,27 @@ export class ReservationDomain {
 
   public static requiresAdminApproval(resourceId: string): boolean {
     return resourceId.startsWith("VIP_");
+  }
+}
+
+export class BookingPolicy {
+  private static readonly MAX_DAILY_MS = 4 * 60 * 60 * 1000; // 4 hours
+
+  public static validateDailyQuota(
+    existingBookings: Array<{ startTime: Date; endTime: Date }>,
+    newStart: Date,
+    newEnd: Date,
+  ): void {
+    const existingMs = existingBookings.reduce(
+      (sum, b) => sum + (b.endTime.getTime() - b.startTime.getTime()),
+      0,
+    );
+    const requestedMs = newEnd.getTime() - newStart.getTime();
+
+    if (existingMs + requestedMs > this.MAX_DAILY_MS) {
+      throw new DailyQuotaExceededError(
+        "Domain Rule Violation: 4-hour daily booking limit exceeded",
+      );
+    }
   }
 }

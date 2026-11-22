@@ -1,6 +1,12 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, gte, lt, ne } from "drizzle-orm";
 import { db } from "../../db";
-import { reservations, type Reservation } from "../../db/schema";
+import {
+  reservations,
+  resources,
+  type NewReservation,
+  type Reservation,
+  type Resource,
+} from "../../db/schema";
 
 export class ReservationRepository {
   async getById(id: number): Promise<Reservation | undefined> {
@@ -9,6 +15,33 @@ export class ReservationRepository {
       .from(reservations)
       .where(eq(reservations.id, id));
     return result[0];
+  }
+
+  async getResourceById(resourceId: string): Promise<Resource | undefined> {
+    const result = await db
+      .select()
+      .from(resources)
+      .where(eq(resources.resourceId, resourceId))
+      .limit(1);
+    return result[0];
+  }
+
+  async getActiveForUserOnDay(
+    userId: string,
+    dayStart: Date,
+    dayEnd: Date,
+  ): Promise<Reservation[]> {
+    return db
+      .select()
+      .from(reservations)
+      .where(
+        and(
+          eq(reservations.userId, userId),
+          gte(reservations.startTime, dayStart),
+          lt(reservations.startTime, dayEnd),
+          ne(reservations.state, "CANCELLED"),
+        ),
+      );
   }
 
   async hasConfirmedOverlap(
@@ -32,6 +65,11 @@ export class ReservationRepository {
       .limit(1);
 
     return result.length > 0;
+  }
+
+  async create(data: NewReservation): Promise<Reservation> {
+    const result = await db.insert(reservations).values(data).returning();
+    return result[0];
   }
 
   async tryTransition(

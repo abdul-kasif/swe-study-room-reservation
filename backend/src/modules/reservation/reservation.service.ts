@@ -1,13 +1,62 @@
 import { ReservationRepository } from "./reservation.repository";
-import { ReservationDomain } from "./reservation.domain";
+import { BookingPolicy, ReservationDomain } from "./reservation.domain";
 import {
   ReservationNotFoundError,
   InvalidStateTransitionError,
   ReservationConflictError,
+  ResourceNotFoundError,
 } from "../../core/errors";
+import type { CreateReservationBody } from "./reservation.schema";
 
 export class ReservationService {
   constructor(private readonly repository: ReservationRepository) {}
+
+  async createReservation(
+    dto: CreateReservationBody,
+  ): Promise<ReservationDomain> {
+    // 1. Verify resource exists and is active
+    const resource = await this.repository.getResourceById(dto.resourceId);
+    if (!resource || !resource.isActive) {
+      throw new ResourceNotFoundError(
+        `Resource '${dto.resourceId}' does not exist or is inactive`,
+      );
+    }
+
+    // 2. Compute UTC day window for quota check
+    const dayStart = new Date(dto.startTime);
+    dayStart.setUTCHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
+
+    // 3. Enforce pure domain policy
+    const activeBookings = await this.repository.getActiveForUserOnDay(
+      dto.userId,
+      dayStart,
+      dayEnd,
+    );
+    BookingPolicy.validateDailyQuota(
+      activeBookings,
+      dto.startTime,
+      dto.endTime,
+    );
+
+    // 4. Persist as DRAFT
+    const created = await this.repository.create({
+      resourceId: dto.resourceId,
+      userId: dto.userId,
+      startTime: dto.startTime,
+      endTime: dto.endTime,
+      state: "DRAFT",
+    });
+
+    return new ReservationDomain(
+      created.id,
+      created.resourceId,
+      created.startTime,
+      created.endTime,
+      created.state,
+    );
+  }
 
   async confirmReservation(
     reservationId: number,
@@ -64,7 +113,7 @@ export class ReservationService {
 
   async processApproval(
     reservationId: number,
-    adminId: string,
+    _adminId: string,
     decision: "approve" | "reject",
     now: Date = new Date(),
   ): Promise<ReservationDomain> {

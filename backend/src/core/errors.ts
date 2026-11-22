@@ -29,6 +29,18 @@ export class ReservationNotFoundError extends DomainError {
   }
 }
 
+export class ResourceNotFoundError extends DomainError {
+  constructor(message: string = "Resource not found or inactive") {
+    super(message, 404);
+  }
+}
+
+export class DailyQuotaExceededError extends DomainError {
+  constructor(message: string = "Daily booking quota exceeded") {
+    super(message, 400);
+  }
+}
+
 // Centralized Express Error Handler
 export const errorHandler = (
   err: Error,

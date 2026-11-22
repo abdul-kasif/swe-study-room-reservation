@@ -1,30 +1,28 @@
 import { z } from "zod";
 
-export const ReservationCreateSchema = z
+export const CreateReservationBodySchema = z
   .object({
-    resourceId: z.string().min(1),
-    userId: z.string().min(1),
+    resourceId: z.string().trim().min(1, "resourceId is required"),
+    userId: z.string().trim().min(1, "userId is required"),
     startTime: z.coerce.date(),
     endTime: z.coerce.date(),
   })
   .refine((data) => data.startTime < data.endTime, {
-    message: "Invalid interval: start time must be before end time",
+    message: "Invalid interval: startTime must be strictly before endTime",
     path: ["endTime"],
   });
-
-export type ReservationCreateDTO = z.infer<typeof ReservationCreateSchema>;
 
 export const ConfirmReservationParamsSchema = z.object({
   id: z.coerce.number().int().positive(),
 });
-
-export type ConfirmReservationParams = z.infer<
-  typeof ConfirmReservationParamsSchema
->;
 
 export const ProcessApprovalBodySchema = z.object({
   adminId: z.string().min(1),
   decision: z.enum(["approve", "reject"]),
 });
 
+export type CreateReservationBody = z.infer<typeof CreateReservationBodySchema>;
+export type ConfirmReservationParams = z.infer<
+  typeof ConfirmReservationParamsSchema
+>;
 export type ProcessApprovalBody = z.infer<typeof ProcessApprovalBodySchema>;
