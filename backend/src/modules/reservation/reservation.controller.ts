@@ -4,6 +4,7 @@ import {
   CheckAvailabilityBodySchema,
   ConfirmReservationParamsSchema,
   CreateReservationBodySchema,
+  ListReservationsQuerySchema,
   ProcessApprovalBodySchema,
 } from "./reservation.schema";
 
@@ -115,6 +116,33 @@ export class ReservationController {
     try {
       const cancelledCount = await this.service.cleanupExpiredReservations();
       res.status(200).json({ cancelledCount });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public listResources = async (
+    _req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const activeResources = await this.service.listResources();
+      res.status(200).json({ resources: activeResources });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public listReservations = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const filters = ListReservationsQuerySchema.parse(req.query);
+      const items = await this.service.listReservations(filters);
+      res.status(200).json({ reservations: items });
     } catch (error) {
       next(error);
     }

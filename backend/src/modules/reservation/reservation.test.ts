@@ -544,3 +544,67 @@ describe("Reservation Vertical Slice: Admin Auth & Expired Cleanup", () => {
     });
   });
 });
+
+describe("Reservation Vertical Slice: Read Endpoints", () => {
+  beforeEach(async () => {
+    await db.delete(reservations);
+    await db.delete(resources);
+
+    await db.insert(resources).values([
+      { resourceId: "Room-A", name: "Standard Room A", isActive: true },
+      { resourceId: "VIP_Room-A", name: "VIP Room A", isActive: true },
+      { resourceId: "Room-Closed", name: "Closed Room", isActive: false },
+    ]);
+
+    const t1 = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const t2 = new Date(t1.getTime() + 2 * 60 * 60 * 1000);
+
+    await db.insert(reservations).values([
+      {
+        resourceId: "Room-A",
+        userId: "Student1",
+        startTime: t1,
+        endTime: t2,
+        state: "CONFIRMED",
+      },
+      {
+        resourceId: "VIP_Room-A",
+        userId: "Student2",
+        startTime: t1,
+        endTime: t2,
+        state: "PENDING_APPROVAL",
+      },
+    ]);
+  });
+
+  it("should list only active resources", async () => {
+    const response = await request(app).get("/api/resources");
+
+    expect(response.status).toBe(200);
+    expect(response.body.resources).toHaveLength(2);
+    expect(response.body.resources.map((r: any) => r.resourceId)).toEqual([
+      "Room-A",
+      "VIP_Room-A",
+    ]);
+  });
+
+  it("should filter reservations by userId and state", async () => {
+    const byUser = await request(app).get("/api/reservations?userId=Student1");
+    expect(byUser.status).toBe(200);
+    expect(byUser.body.reservations).toHaveLength(1);
+    expect(byUser.body.reservations[0].userId).toBe("Student1");
+
+    const byState = await request(app).get(
+      "/api/reservations?state=PENDING_APPROVAL",
+    );
+    expect(byState.status).toBe(200);
+    expect(byState.body.reservations).toHaveLength(1);
+    expect(byState.body.reservations[0].resourceId).toBe("VIP_Room-A");
+  });
+
+  it("should reject an invalid state filter with 422", async () => {
+    const response = await request(app).get("/api/reservations?state=UNKNOWN");
+    expect(response.status).toBe(422);
+    expect(response.body.error).toBe("Validation Error");
+  });
+});

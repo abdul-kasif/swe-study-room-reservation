@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import { errorHandler } from "./core/errors";
 import { ReservationController } from "./modules/reservation/reservation.controller";
 import { ReservationService } from "./modules/reservation/reservation.service";
@@ -8,6 +9,12 @@ import { requireAdminAuth } from "./core/auth";
 const app = express();
 
 app.use(express.json());
+
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+  }),
+);
 
 const reservationRepo = new ReservationRepository();
 const reservationService = new ReservationService(reservationRepo);
@@ -20,6 +27,7 @@ app.use("/api/reservations", reservationRouter);
 reservationRouter.post("/", reservationController.create);
 reservationRouter.post("/:id/confirm", reservationController.confirm);
 reservationRouter.post("/:id/cancel", reservationController.cancel);
+reservationRouter.get("/", reservationController.listReservations);
 
 // Protect VIP approval with admin auth
 reservationRouter.post(
@@ -35,6 +43,8 @@ app.post(
   requireAdminAuth,
   reservationController.cleanupExpired,
 );
+
+app.get("/api/resources", reservationController.listResources);
 
 app.use(errorHandler);
 

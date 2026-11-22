@@ -32,9 +32,17 @@ export const CheckAvailabilityBodySchema = z
     path: ["endTime"],
   });
 
+export const ListReservationsQuerySchema = z.object({
+  userId: z.string().trim().min(1).optional(),
+  state: z
+    .enum(["DRAFT", "PENDING_APPROVAL", "CONFIRMED", "CANCELLED"])
+    .optional(),
+});
+
 export type CreateReservationBody = z.infer<typeof CreateReservationBodySchema>;
 export type ConfirmReservationParams = z.infer<
   typeof ConfirmReservationParamsSchema
 >;
 export type ProcessApprovalBody = z.infer<typeof ProcessApprovalBodySchema>;
 export type CheckAvailabilityBody = z.infer<typeof CheckAvailabilityBodySchema>;
+export type ListReservationsQuery = z.infer<typeof ListReservationsQuerySchema>;

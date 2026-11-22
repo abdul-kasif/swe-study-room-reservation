@@ -1,4 +1,4 @@
-import { eq, and, sql, gte, lt, ne } from "drizzle-orm";
+import { eq, and, sql, gte, lt, ne, asc, desc } from "drizzle-orm";
 import { db } from "../../db";
 import {
   reservations,
@@ -68,6 +68,38 @@ export class ReservationRepository {
       .limit(1);
 
     return result.length > 0;
+  }
+
+  async getActiveResources(): Promise<Resource[]> {
+    return db
+      .select()
+      .from(resources)
+      .where(eq(resources.isActive, true))
+      .orderBy(asc(resources.resourceId));
+  }
+
+  async listReservations(filters: {
+    userId?: string;
+    state?: string;
+  }): Promise<Reservation[]> {
+    const conditions = [];
+
+    if (filters.userId) {
+      conditions.push(eq(reservations.userId, filters.userId));
+    }
+    if (filters.state) {
+      conditions.push(eq(reservations.state, filters.state));
+    }
+
+    const query = db.select().from(reservations);
+
+    if (conditions.length > 0) {
+      return query
+        .where(and(...conditions))
+        .orderBy(desc(reservations.startTime));
+    }
+
+    return query.orderBy(desc(reservations.startTime));
   }
 
   async create(data: NewReservation): Promise<Reservation> {

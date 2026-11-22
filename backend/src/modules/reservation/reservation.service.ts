@@ -9,6 +9,7 @@ import {
 import type {
   CheckAvailabilityBody,
   CreateReservationBody,
+  ListReservationsQuery,
 } from "./reservation.schema";
 
 export class ReservationService {
@@ -255,5 +256,13 @@ export class ReservationService {
 
   async cleanupExpiredReservations(now: Date = new Date()): Promise<number> {
     return this.repository.cleanupExpired(now);
+  }
+
+  async listResources() {
+    return this.repository.getActiveResources();
+  }
+
+  async listReservations(filters: ListReservationsQuery) {
+    return this.repository.listReservations(filters);
   }
 }
