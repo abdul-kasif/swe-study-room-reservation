@@ -270,3 +270,85 @@ describe("Reservation Vertical Slice: VIP Approval", () => {
     expect(dbRecord[0].state).toBe("CANCELLED");
   });
 });
+
+describe("Reservation Vertical Slice: Cancel Reservation", () => {
+  let futureReservationId: number;
+
+  beforeEach(async () => {
+    await db.delete(reservations);
+    await db.delete(resources);
+
+    await db.insert(resources).values({
+      resourceId: "Room-A",
+      name: "Standard Room A",
+      isActive: true,
+    });
+
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const end = new Date(tomorrow);
+    end.setHours(end.getHours() + 2);
+
+    const inserted = await db
+      .insert(reservations)
+      .values({
+        resourceId: "Room-A",
+        userId: "Student1",
+        startTime: tomorrow,
+        endTime: end,
+        state: "CONFIRMED",
+      })
+      .returning();
+
+    futureReservationId = inserted[0].id;
+  });
+
+  it("should cancel a future reservation and be idempotent on repeat calls", async () => {
+    const first = await request(app)
+      .post(`/api/reservations/${futureReservationId}/cancel`)
+      .send();
+
+    expect(first.status).toBe(200);
+    expect(first.body).toEqual({ id: futureReservationId, state: "CANCELLED" });
+
+    // Repeat call should also return 200 OK without error
+    const repeat = await request(app)
+      .post(`/api/reservations/${futureReservationId}/cancel`)
+      .send();
+
+    expect(repeat.status).toBe(200);
+    expect(repeat.body).toEqual({
+      id: futureReservationId,
+      state: "CANCELLED",
+    });
+  });
+
+  it("should reject cancellation if the start time has already passed", async () => {
+    const pastStart = new Date();
+    pastStart.setHours(pastStart.getHours() - 2);
+    const pastEnd = new Date();
+    pastEnd.setHours(pastEnd.getHours() - 1);
+
+    await db
+      .update(reservations)
+      .set({ startTime: pastStart, endTime: pastEnd })
+      .where(eq(reservations.id, futureReservationId));
+
+    const response = await request(app)
+      .post(`/api/reservations/${futureReservationId}/cancel`)
+      .send();
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe("InvalidStateTransitionError");
+    expect(response.body.detail).toContain("Cannot cancel");
+  });
+
+  it("should return 404 when cancelling a non-existent reservation", async () => {
+    const response = await request(app)
+      .post("/api/reservations/999999/cancel")
+      .send();
+
+    expect(response.status).toBe(404);
+    expect(response.body.error).toBe("ReservationNotFoundError");
+  });
+});

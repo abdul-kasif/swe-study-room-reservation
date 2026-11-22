@@ -186,4 +186,47 @@ export class ReservationService {
 
     return reservation;
   }
+
+  async cancelReservation(
+    reservationId: number,
+    now: Date = new Date(),
+  ): Promise<ReservationDomain> {
+    const record = await this.repository.getById(reservationId);
+    if (!record) {
+      throw new ReservationNotFoundError("Reservation not found");
+    }
+
+    const reservation = new ReservationDomain(
+      record.id,
+      record.resourceId,
+      record.startTime,
+      record.endTime,
+      record.state,
+    );
+
+    const previousState = reservation.state;
+    const stateChanged = reservation.cancel(now);
+    if (!stateChanged) {
+      return reservation;
+    }
+
+    const applied = await this.repository.tryTransition(
+      reservation.id,
+      previousState,
+      "CANCELLED",
+      false, // No overlap check needed when cancelling
+    );
+
+    if (!applied) {
+      const current = await this.repository.getById(reservation.id);
+      if (current?.state === "CANCELLED") {
+        return reservation; // Another request already cancelled it
+      }
+      throw new InvalidStateTransitionError(
+        "Reservation state changed concurrently; please retry",
+      );
+    }
+
+    return reservation;
+  }
 }

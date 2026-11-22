@@ -16,6 +16,7 @@ const reservationRouter = express.Router();
 reservationRouter.post("/", reservationController.create);
 reservationRouter.post("/:id/confirm", reservationController.confirm);
 reservationRouter.post("/:id/approval", reservationController.processApproval);
+reservationRouter.post("/:id/cancel", reservationController.cancel);
 
 app.use("/api/reservations", reservationRouter);
 

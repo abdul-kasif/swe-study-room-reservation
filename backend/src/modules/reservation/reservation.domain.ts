@@ -13,6 +13,17 @@ export class ReservationDomain {
     public state: string,
   ) {}
 
+  public ensureCanCancel(now: Date): void {
+    if (this.state === "CANCELLED") {
+      return;
+    }
+    if (now >= this.startTime) {
+      throw new InvalidStateTransitionError(
+        "Policy Violation: Cannot cancel a reservation after its start time",
+      );
+    }
+  }
+
   public ensureCanConfirm(now: Date): void {
     if (this.state !== "DRAFT") {
       throw new InvalidStateTransitionError(
@@ -26,27 +37,12 @@ export class ReservationDomain {
     }
   }
 
-  public confirm(hasConflict: boolean, requiresApproval: boolean): void {
-    if (hasConflict) {
-      throw new ReservationConflictError(
-        "Conflict: Resource was already booked by another user",
-      );
-    }
-
-    this.state = requiresApproval ? "PENDING_APPROVAL" : "CONFIRMED";
-  }
-
   public ensureCanProcessApproval(): void {
     if (this.state !== "PENDING_APPROVAL") {
       throw new InvalidStateTransitionError(
         "Only PENDING_APPROVAL reservations can be approved or rejected",
       );
     }
-  }
-
-  public reject(): void {
-    this.ensureCanProcessApproval();
-    this.state = "CANCELLED";
   }
 
   public isExpired(now: Date): boolean {
@@ -66,6 +62,34 @@ export class ReservationDomain {
       );
     }
     this.state = "CONFIRMED";
+  }
+
+  public reject(): void {
+    this.ensureCanProcessApproval();
+    this.state = "CANCELLED";
+  }
+
+  public confirm(hasConflict: boolean, requiresApproval: boolean): void {
+    if (hasConflict) {
+      throw new ReservationConflictError(
+        "Conflict: Resource was already booked by another user",
+      );
+    }
+
+    this.state = requiresApproval ? "PENDING_APPROVAL" : "CONFIRMED";
+  }
+
+  /**
+   * Transitions to CANCELLED if strictly before startTime.
+   * Returns true if the state changed, false if already CANCELLED (idempotent).
+   */
+  public cancel(now: Date): boolean {
+    if (this.state === "CANCELLED") {
+      return false;
+    }
+    this.ensureCanCancel(now);
+    this.state = "CANCELLED";
+    return true;
   }
 
   public static requiresAdminApproval(resourceId: string): boolean {

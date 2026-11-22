@@ -72,4 +72,22 @@ export class ReservationController {
       next(error);
     }
   };
+
+  public cancel = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const { id } = ConfirmReservationParamsSchema.parse(req.params);
+      const cancelled = await this.service.cancelReservation(id);
+
+      res.status(200).json({
+        id: cancelled.id,
+        state: cancelled.state,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 }
