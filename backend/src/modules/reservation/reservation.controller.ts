@@ -6,6 +6,8 @@ import {
   CreateReservationBodySchema,
   ListReservationsQuerySchema,
   ProcessApprovalBodySchema,
+  RoomScheduleParamsSchema,
+  RoomScheduleQuerySchema,
 } from "./reservation.schema";
 
 export class ReservationController {
@@ -152,6 +154,22 @@ export class ReservationController {
 
       const items = await this.service.listReservations(scopedFilters);
       res.status(200).json({ reservations: items });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public getRoomSchedule = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const { resourceId } = RoomScheduleParamsSchema.parse(req.params);
+      const { date } = RoomScheduleQuerySchema.parse(req.query);
+
+      const bookedSlots = await this.service.getRoomSchedule(resourceId, date);
+      res.status(200).json({ resourceId, date, bookedSlots });
     } catch (error) {
       next(error);
     }

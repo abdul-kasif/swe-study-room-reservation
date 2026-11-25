@@ -254,6 +254,28 @@ export class ReservationService {
     return hasOverlap ? "UNAVAILABLE" : "AVAILABLE";
   }
 
+  async getRoomSchedule(
+    resourceId: string,
+    date: string,
+  ): Promise<Array<{ startTime: Date; endTime: Date }>> {
+    const resource = await this.repository.getResourceById(resourceId);
+    if (!resource || !resource.isActive) {
+      throw new ResourceNotFoundError(
+        `Resource '${resourceId}' does not exist or is inactive`,
+      );
+    }
+
+    const dayStart = new Date(`${date}T00:00:00.000Z`);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
+
+    return this.repository.getConfirmedScheduleForDay(
+      resourceId,
+      dayStart,
+      dayEnd,
+    );
+  }
+
   async cleanupExpiredReservations(now: Date = new Date()): Promise<number> {
     return this.repository.cleanupExpired(now);
   }

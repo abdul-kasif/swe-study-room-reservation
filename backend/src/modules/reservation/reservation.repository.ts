@@ -1,4 +1,4 @@
-import { eq, and, sql, gte, lt, ne, asc, desc } from "drizzle-orm";
+import { eq, and, sql, gte, lt, ne, asc, desc, gt } from "drizzle-orm";
 import { db } from "../../db";
 import {
   reservations,
@@ -105,6 +105,28 @@ export class ReservationRepository {
   async create(data: NewReservation): Promise<Reservation> {
     const result = await db.insert(reservations).values(data).returning();
     return result[0];
+  }
+
+  async getConfirmedScheduleForDay(
+    resourceId: string,
+    dayStart: Date,
+    dayEnd: Date,
+  ): Promise<Array<{ startTime: Date; endTime: Date }>> {
+    return db
+      .select({
+        startTime: reservations.startTime,
+        endTime: reservations.endTime,
+      })
+      .from(reservations)
+      .where(
+        and(
+          eq(reservations.resourceId, resourceId),
+          eq(reservations.state, "CONFIRMED"),
+          lt(reservations.startTime, dayEnd),
+          gt(reservations.endTime, dayStart),
+        ),
+      )
+      .orderBy(asc(reservations.startTime));
   }
 
   async tryTransition(

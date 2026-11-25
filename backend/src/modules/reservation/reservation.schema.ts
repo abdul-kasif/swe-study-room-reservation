@@ -37,6 +37,16 @@ export const ListReservationsQuerySchema = z.object({
     .optional(),
 });
 
+export const RoomScheduleParamsSchema = z.object({
+  resourceId: z.string().trim().min(1, "resourceId is required"),
+});
+
+export const RoomScheduleQuerySchema = z.object({
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "date must be in YYYY-MM-DD format"),
+});
+
 export type CreateReservationBody = z.infer<typeof CreateReservationBodySchema>;
 export type ConfirmReservationParams = z.infer<
   typeof ConfirmReservationParamsSchema

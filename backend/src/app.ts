@@ -60,6 +60,12 @@ app.post(
   reservationController.cleanupExpired,
 );
 
+app.get(
+  "/api/resources/:resourceId/schedule",
+  requireAuth,
+  reservationController.getRoomSchedule,
+);
+
 app.use(errorHandler);
 
 export { app };

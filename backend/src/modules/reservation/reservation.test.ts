@@ -616,3 +616,59 @@ describe("Reservation Vertical Slice: Read Endpoints", () => {
     expect(response.body.error).toBe("Validation Error");
   });
 });
+
+describe("Reservation Vertical Slice: Room Schedule", () => {
+  beforeEach(async () => {
+    await db.delete(reservations);
+    await db.delete(resources);
+
+    await db.insert(resources).values([
+      { resourceId: "Room-A", name: "Standard Room A", isActive: true },
+      { resourceId: "Room-Closed", name: "Closed Room", isActive: false },
+    ]);
+
+    const day = "2030-05-15";
+    await db.insert(reservations).values([
+      {
+        resourceId: "Room-A",
+        userId: "OtherStudent",
+        startTime: new Date(`${day}T10:00:00.000Z`),
+        endTime: new Date(`${day}T12:00:00.000Z`),
+        state: "CONFIRMED",
+      },
+      {
+        resourceId: "Room-A",
+        userId: "OtherStudent",
+        startTime: new Date(`${day}T14:00:00.000Z`),
+        endTime: new Date(`${day}T15:00:00.000Z`),
+        state: "DRAFT",
+      },
+    ]);
+  });
+
+  it("should return only CONFIRMED intervals without leaking userId", async () => {
+    const res = await request(app)
+      .get("/api/resources/Room-A/schedule?date=2030-05-15")
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.bookedSlots).toHaveLength(1);
+    expect(res.body.bookedSlots[0]).toEqual({
+      startTime: "2030-05-15T10:00:00.000Z",
+      endTime: "2030-05-15T12:00:00.000Z",
+    });
+    expect(res.body.bookedSlots[0]).not.toHaveProperty("userId");
+  });
+
+  it("should return 404 for an inactive or missing room and 422 for an invalid date", async () => {
+    const missing = await request(app)
+      .get("/api/resources/Room-Closed/schedule?date=2030-05-15")
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`);
+    expect(missing.status).toBe(404);
+
+    const badDate = await request(app)
+      .get("/api/resources/Room-A/schedule?date=15-05-2030")
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`);
+    expect(badDate.status).toBe(422);
+  });
+});
