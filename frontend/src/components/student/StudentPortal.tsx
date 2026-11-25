@@ -212,49 +212,52 @@ export function StudentPortal() {
         </Alert>
       )}
 
-      {/* Visual Timetable Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Book a Study Room</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <RoomDateFilter
-            resources={resources}
-            selectedResourceId={selectedResourceId}
-            selectedDate={selectedDate}
-            minDate={today}
-            onResourceChange={setSelectedResourceId}
-            onDateChange={setSelectedDate}
-          />
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1.45fr_1fr]">
+        {/* Left: Visual Timetable Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Book a Study Room</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <RoomDateFilter
+              resources={resources}
+              selectedResourceId={selectedResourceId}
+              selectedDate={selectedDate}
+              minDate={today}
+              onResourceChange={setSelectedResourceId}
+              onDateChange={setSelectedDate}
+            />
 
-          <TimeSlotGrid
-            selectedDate={selectedDate}
-            bookedSlots={bookedSlots}
-            selectedHours={selectedHours}
-            loading={scheduleLoading}
-            onToggleHour={handleToggleHour}
-          />
+            <TimeSlotGrid
+              selectedDate={selectedDate}
+              bookedSlots={bookedSlots}
+              selectedHours={selectedHours}
+              loading={scheduleLoading}
+              onToggleHour={handleToggleHour}
+            />
 
-          <BookingSummaryBar
-            resourceId={selectedResourceId}
-            resourceName={selectedResource?.name || selectedResourceId}
-            selectedDate={selectedDate}
-            selectedHours={selectedHours}
-            submitting={submitting}
-            onConfirmBooking={handleConfirmBooking}
-            onClearSelection={() => setSelectedHours([])}
-          />
-        </CardContent>
-      </Card>
+            <BookingSummaryBar
+              resourceId={selectedResourceId}
+              resourceName={selectedResource?.name || selectedResourceId}
+              selectedDate={selectedDate}
+              selectedHours={selectedHours}
+              submitting={submitting}
+              onConfirmBooking={handleConfirmBooking}
+              onClearSelection={() => setSelectedHours([])}
+            />
+          </CardContent>
+        </Card>
 
-      {/* Student's Reservations */}
-      <MyReservationsList
-        username={user?.username || ""}
-        reservations={reservations}
-        onRefresh={loadReservations}
-        onConfirm={handleConfirmExisting}
-        onCancel={handleCancelExisting}
-      />
+        <div className="lg:sticky lg:top-24">
+          <MyReservationsList
+            username={user?.username || ""}
+            reservations={reservations}
+            onRefresh={loadReservations}
+            onConfirm={handleConfirmExisting}
+            onCancel={handleCancelExisting}
+          />
+        </div>
+      </div>
     </div>
   );
 }

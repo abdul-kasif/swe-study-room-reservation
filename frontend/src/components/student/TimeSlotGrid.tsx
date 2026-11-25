@@ -85,7 +85,7 @@ export function TimeSlotGrid({
       </div>
 
       {/* Hourly Grid */}
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
         {HOURS.map((hour) => {
           const booked = isBooked(hour);
           const past = isPast(hour);
