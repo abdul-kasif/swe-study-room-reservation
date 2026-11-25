@@ -251,6 +251,7 @@ export function StudentPortal() {
         <div className="lg:sticky lg:top-24">
           <MyReservationsList
             username={user?.username || ""}
+            resources={resources}
             reservations={reservations}
             onRefresh={loadReservations}
             onConfirm={handleConfirmExisting}
