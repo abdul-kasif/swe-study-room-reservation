@@ -7,7 +7,7 @@ import { ReservationRepository } from "./modules/reservation/reservation.reposit
 import { AuthRepository } from "./modules/auth/auth.repository";
 import { AuthService } from "./modules/auth/auth.service";
 import { AuthController } from "./modules/auth/auth.controller";
-import { requireAdminAuth } from "./core/auth";
+import { requireAuth, requireRole } from "./core/auth";
 
 const app = express();
 
@@ -33,31 +33,32 @@ const reservationRepo = new ReservationRepository();
 const reservationService = new ReservationService(reservationRepo);
 const reservationController = new ReservationController(reservationService);
 
+// Reservation routes (all require a valid JWT)
 const reservationRouter = express.Router();
-
-app.use("/api/reservations", reservationRouter);
-
+reservationRouter.use(requireAuth);
+reservationRouter.get("/", reservationController.listReservations);
 reservationRouter.post("/", reservationController.create);
 reservationRouter.post("/:id/confirm", reservationController.confirm);
 reservationRouter.post("/:id/cancel", reservationController.cancel);
-reservationRouter.get("/", reservationController.listReservations);
-
-// Protect VIP approval with admin auth
 reservationRouter.post(
   "/:id/approval",
-  requireAdminAuth,
+  requireRole("ADMIN"),
   reservationController.processApproval,
 );
 
-app.post("/api/availability", reservationController.checkAvailability);
-
+app.use("/api/reservations", reservationRouter);
+app.get("/api/resources", requireAuth, reservationController.listResources);
+app.post(
+  "/api/availability",
+  requireAuth,
+  reservationController.checkAvailability,
+);
 app.post(
   "/api/admin/cleanup-expired",
-  requireAdminAuth,
+  requireAuth,
+  requireRole("ADMIN"),
   reservationController.cleanupExpired,
 );
-
-app.get("/api/resources", reservationController.listResources);
 
 app.use(errorHandler);
 

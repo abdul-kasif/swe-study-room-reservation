@@ -79,8 +79,8 @@ export class ReservationRepository {
   }
 
   async listReservations(filters: {
-    userId?: string;
-    state?: string;
+    userId?: string | undefined;
+    state?: string | undefined;
   }): Promise<Reservation[]> {
     const conditions = [];
 

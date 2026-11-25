@@ -3,7 +3,6 @@ import { z } from "zod";
 export const CreateReservationBodySchema = z
   .object({
     resourceId: z.string().trim().min(1, "resourceId is required"),
-    userId: z.string().trim().min(1, "userId is required"),
     startTime: z.coerce.date(),
     endTime: z.coerce.date(),
   })
@@ -17,7 +16,6 @@ export const ConfirmReservationParamsSchema = z.object({
 });
 
 export const ProcessApprovalBodySchema = z.object({
-  adminId: z.string().min(1),
   decision: z.enum(["approve", "reject"]),
 });
 

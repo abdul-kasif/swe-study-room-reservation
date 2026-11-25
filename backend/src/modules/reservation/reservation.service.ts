@@ -16,7 +16,7 @@ export class ReservationService {
   constructor(private readonly repository: ReservationRepository) {}
 
   async createReservation(
-    dto: CreateReservationBody,
+    dto: CreateReservationBody & { userId: string },
   ): Promise<ReservationDomain> {
     // 1. Verify resource exists and is active
     const resource = await this.repository.getResourceById(dto.resourceId);

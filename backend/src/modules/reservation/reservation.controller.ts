@@ -18,7 +18,10 @@ export class ReservationController {
   ): Promise<void> => {
     try {
       const dto = CreateReservationBodySchema.parse(req.body);
-      const created = await this.service.createReservation(dto);
+      const created = await this.service.createReservation({
+        ...dto,
+        userId: req.user!.sub,
+      });
 
       res.status(201).json({
         id: created.id,
@@ -26,6 +29,30 @@ export class ReservationController {
         startTime: created.startTime,
         endTime: created.endTime,
         state: created.state,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public processApproval = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const { id } = ConfirmReservationParamsSchema.parse(req.params);
+      const { decision } = ProcessApprovalBodySchema.parse(req.body);
+
+      const updatedReservation = await this.service.processApproval(
+        id,
+        req.user!.sub,
+        decision,
+      );
+
+      res.status(200).json({
+        id: updatedReservation.id,
+        state: updatedReservation.state,
       });
     } catch (error) {
       next(error);
@@ -41,30 +68,6 @@ export class ReservationController {
       const { id } = ConfirmReservationParamsSchema.parse(req.params);
 
       const updatedReservation = await this.service.confirmReservation(id);
-
-      res.status(200).json({
-        id: updatedReservation.id,
-        state: updatedReservation.state,
-      });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  public processApproval = async (
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> => {
-    try {
-      const { id } = ConfirmReservationParamsSchema.parse(req.params);
-      const { adminId, decision } = ProcessApprovalBodySchema.parse(req.body);
-
-      const updatedReservation = await this.service.processApproval(
-        id,
-        adminId,
-        decision,
-      );
 
       res.status(200).json({
         id: updatedReservation.id,
@@ -141,7 +144,13 @@ export class ReservationController {
   ): Promise<void> => {
     try {
       const filters = ListReservationsQuerySchema.parse(req.query);
-      const items = await this.service.listReservations(filters);
+
+      const scopedFilters =
+        req.user!.role === "STUDENT"
+          ? { ...filters, userId: req.user!.sub }
+          : filters;
+
+      const items = await this.service.listReservations(scopedFilters);
       res.status(200).json({ reservations: items });
     } catch (error) {
       next(error);

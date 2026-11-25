@@ -4,9 +4,17 @@ import { app } from "../../app";
 import { db } from "../../db";
 import { reservations, resources } from "../../db/schema";
 import { eq } from "drizzle-orm";
+import jwt from "jsonwebtoken";
+import { getJwtSecret } from "../auth/auth.service";
 
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "test-admin-secret";
-process.env.ADMIN_TOKEN = ADMIN_TOKEN;
+const STUDENT_TOKEN = jwt.sign(
+  { sub: "Student1", fullName: "Alice Student", role: "STUDENT" },
+  getJwtSecret(),
+);
+const ADMIN_TOKEN = jwt.sign(
+  { sub: "Admin1", fullName: "Campus Admin", role: "ADMIN" },
+  getJwtSecret(),
+);
 
 describe("Reservation Vertical Slice: Create Reservation", () => {
   const tomorrowAt = (hour: number) => {
@@ -29,9 +37,9 @@ describe("Reservation Vertical Slice: Create Reservation", () => {
   it("should create a DRAFT reservation and return 201 Created", async () => {
     const response = await request(app)
       .post("/api/reservations")
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`)
       .send({
         resourceId: "Room-A",
-        userId: "Student1",
         startTime: tomorrowAt(10),
         endTime: tomorrowAt(12),
       });
@@ -44,9 +52,9 @@ describe("Reservation Vertical Slice: Create Reservation", () => {
   it("should reject booking an inactive or missing resource with 404", async () => {
     const response = await request(app)
       .post("/api/reservations")
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`)
       .send({
         resourceId: "Room-Closed",
-        userId: "Student1",
         startTime: tomorrowAt(10),
         endTime: tomorrowAt(12),
       });
@@ -59,9 +67,9 @@ describe("Reservation Vertical Slice: Create Reservation", () => {
     // First 3-hour booking succeeds
     const first = await request(app)
       .post("/api/reservations")
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`)
       .send({
         resourceId: "Room-A",
-        userId: "Student1",
         startTime: tomorrowAt(8),
         endTime: tomorrowAt(11),
       });
@@ -70,9 +78,9 @@ describe("Reservation Vertical Slice: Create Reservation", () => {
     // Second 2-hour booking on the same day exceeds 4 hours -> 400
     const second = await request(app)
       .post("/api/reservations")
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`)
       .send({
         resourceId: "Room-A",
-        userId: "Student1",
         startTime: tomorrowAt(12),
         endTime: tomorrowAt(14),
       });
@@ -84,9 +92,9 @@ describe("Reservation Vertical Slice: Create Reservation", () => {
   it("should reject invalid intervals where startTime >= endTime with 422", async () => {
     const response = await request(app)
       .post("/api/reservations")
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`)
       .send({
         resourceId: "Room-A",
-        userId: "Student1",
         startTime: tomorrowAt(12),
         endTime: tomorrowAt(10),
       });
@@ -99,20 +107,16 @@ describe("Reservation Vertical Slice: Create Reservation", () => {
 describe("Reservation Vertical Slice: Confirmation", () => {
   let testReservationId: number;
 
-  // Runs before every single test to ensure a clean, reproducible state
   beforeEach(async () => {
-    // 1. Clean up existing data
     await db.delete(reservations);
     await db.delete(resources);
 
-    // 2. Seed a standard room
     await db.insert(resources).values({
       resourceId: "Room-A",
       name: "Standard Room A",
       isActive: true,
     });
 
-    // 3. Seed a DRAFT reservation for tomorrow
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const end = new Date(tomorrow);
@@ -122,7 +126,7 @@ describe("Reservation Vertical Slice: Confirmation", () => {
       .insert(reservations)
       .values({
         resourceId: "Room-A",
-        userId: "TestUser1",
+        userId: "Student1",
         startTime: tomorrow,
         endTime: end,
         state: "DRAFT",
@@ -132,26 +136,22 @@ describe("Reservation Vertical Slice: Confirmation", () => {
     testReservationId = inserted[0].id;
   });
 
-  // Clean up the database connection after all tests finish
   afterAll(async () => {
-    // Note: In a real setup, you'd close the pg Pool here to let the test exit cleanly.
-    // For example: await pool.end(); if you export the pool from src/db/index.ts
+    // Pool cleanup hook if needed
   });
 
   it("should confirm a DRAFT reservation and return 200 OK", async () => {
-    // ACT: Hit the API layer
     const response = await request(app)
       .post(`/api/reservations/${testReservationId}/confirm`)
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`)
       .send();
 
-    // ASSERT: Check the HTTP boundary (Controller/Zod)
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
       id: testReservationId,
       state: "CONFIRMED",
     });
 
-    // ASSERT: Check the Data Layer (Database state)
     const dbRecord = await db
       .select()
       .from(reservations)
@@ -160,18 +160,16 @@ describe("Reservation Vertical Slice: Confirmation", () => {
   });
 
   it("should enforce domain rules: cannot confirm an already CONFIRMED reservation", async () => {
-    // ARRANGE: Manually confirm it first
     await db
       .update(reservations)
       .set({ state: "CONFIRMED" })
       .where(eq(reservations.id, testReservationId));
 
-    // ACT: Try to confirm it again
     const response = await request(app)
       .post(`/api/reservations/${testReservationId}/confirm`)
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`)
       .send();
 
-    // ASSERT: Should hit the InvalidStateTransitionError in the Domain layer
     expect(response.status).toBe(400);
     expect(response.body.error).toBe("InvalidStateTransitionError");
     expect(response.body.detail).toBe(
@@ -180,12 +178,11 @@ describe("Reservation Vertical Slice: Confirmation", () => {
   });
 
   it("should enforce parameter validation: reject invalid IDs", async () => {
-    // ACT: Pass a string instead of a number
     const response = await request(app)
       .post(`/api/reservations/not-a-number/confirm`)
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`)
       .send();
 
-    // ASSERT: Should be caught by the Zod Schema before hitting the Service layer
     expect(response.status).toBe(422);
     expect(response.body.error).toBe("Validation Error");
   });
@@ -213,7 +210,7 @@ describe("Reservation Vertical Slice: VIP Approval", () => {
       .insert(reservations)
       .values({
         resourceId: "VIP_Room-A",
-        userId: "TestUser2",
+        userId: "Student1",
         startTime: tomorrow,
         endTime: end,
         state: "PENDING_APPROVAL",
@@ -226,8 +223,8 @@ describe("Reservation Vertical Slice: VIP Approval", () => {
   it("should approve a PENDING_APPROVAL reservation", async () => {
     const response = await request(app)
       .post(`/api/reservations/${pendingReservationId}/approval`)
-      .set("x-admin-token", ADMIN_TOKEN)
-      .send({ adminId: "Admin1", decision: "approve" });
+      .set("Authorization", `Bearer ${ADMIN_TOKEN}`)
+      .send({ decision: "approve" });
 
     expect(response.status).toBe(200);
     expect(response.body.state).toBe("CONFIRMED");
@@ -242,15 +239,14 @@ describe("Reservation Vertical Slice: VIP Approval", () => {
   it("should reject a PENDING_APPROVAL reservation and set to CANCELLED", async () => {
     const response = await request(app)
       .post(`/api/reservations/${pendingReservationId}/approval`)
-      .set("x-admin-token", ADMIN_TOKEN)
-      .send({ adminId: "Admin1", decision: "reject" });
+      .set("Authorization", `Bearer ${ADMIN_TOKEN}`)
+      .send({ decision: "reject" });
 
     expect(response.status).toBe(200);
     expect(response.body.state).toBe("CANCELLED");
   });
 
   it("should block approval if start time has passed (expiry)", async () => {
-    // ARRANGE: Set the start time to the past
     const past = new Date();
     past.setHours(past.getHours() - 2);
     await db
@@ -258,17 +254,14 @@ describe("Reservation Vertical Slice: VIP Approval", () => {
       .set({ startTime: past })
       .where(eq(reservations.id, pendingReservationId));
 
-    // ACT
     const response = await request(app)
       .post(`/api/reservations/${pendingReservationId}/approval`)
-      .set("x-admin-token", ADMIN_TOKEN)
-      .send({ adminId: "Admin1", decision: "approve" });
+      .set("Authorization", `Bearer ${ADMIN_TOKEN}`)
+      .send({ decision: "approve" });
 
-    // ASSERT
     expect(response.status).toBe(400);
     expect(response.body.detail).toContain("Approval expired");
 
-    // Ensure the state actually transitioned to CANCELLED in the DB
     const dbRecord = await db
       .select()
       .from(reservations)
@@ -312,14 +305,15 @@ describe("Reservation Vertical Slice: Cancel Reservation", () => {
   it("should cancel a future reservation and be idempotent on repeat calls", async () => {
     const first = await request(app)
       .post(`/api/reservations/${futureReservationId}/cancel`)
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`)
       .send();
 
     expect(first.status).toBe(200);
     expect(first.body).toEqual({ id: futureReservationId, state: "CANCELLED" });
 
-    // Repeat call should also return 200 OK without error
     const repeat = await request(app)
       .post(`/api/reservations/${futureReservationId}/cancel`)
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`)
       .send();
 
     expect(repeat.status).toBe(200);
@@ -342,6 +336,7 @@ describe("Reservation Vertical Slice: Cancel Reservation", () => {
 
     const response = await request(app)
       .post(`/api/reservations/${futureReservationId}/cancel`)
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`)
       .send();
 
     expect(response.status).toBe(400);
@@ -352,6 +347,7 @@ describe("Reservation Vertical Slice: Cancel Reservation", () => {
   it("should return 404 when cancelling a non-existent reservation", async () => {
     const response = await request(app)
       .post("/api/reservations/999999/cancel")
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`)
       .send();
 
     expect(response.status).toBe(404);
@@ -378,7 +374,6 @@ describe("Reservation Vertical Slice: Check Availability", () => {
   });
 
   it("should return AVAILABLE when no CONFIRMED reservation overlaps", async () => {
-    // Seed a DRAFT reservation — drafts should not block availability
     await db.insert(reservations).values({
       resourceId: "Room-A",
       userId: "Student1",
@@ -389,6 +384,7 @@ describe("Reservation Vertical Slice: Check Availability", () => {
 
     const response = await request(app)
       .post("/api/availability")
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`)
       .send({
         resourceId: "Room-A",
         startTime: tomorrowAt(10).toISOString(),
@@ -408,9 +404,9 @@ describe("Reservation Vertical Slice: Check Availability", () => {
       state: "CONFIRMED",
     });
 
-    // Overlapping window (11:00 - 13:00)
     const overlap = await request(app)
       .post("/api/availability")
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`)
       .send({
         resourceId: "Room-A",
         startTime: tomorrowAt(11).toISOString(),
@@ -419,9 +415,9 @@ describe("Reservation Vertical Slice: Check Availability", () => {
     expect(overlap.status).toBe(200);
     expect(overlap.body).toEqual({ status: "UNAVAILABLE" });
 
-    // Adjacent window (12:00 - 14:00) — half-open [start, end) does not conflict
     const adjacent = await request(app)
       .post("/api/availability")
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`)
       .send({
         resourceId: "Room-A",
         startTime: tomorrowAt(12).toISOString(),
@@ -434,6 +430,7 @@ describe("Reservation Vertical Slice: Check Availability", () => {
   it("should return 404 for an inactive or missing resource", async () => {
     const response = await request(app)
       .post("/api/availability")
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`)
       .send({
         resourceId: "Room-Closed",
         startTime: tomorrowAt(10).toISOString(),
@@ -447,6 +444,7 @@ describe("Reservation Vertical Slice: Check Availability", () => {
   it("should return 422 when startTime >= endTime", async () => {
     const response = await request(app)
       .post("/api/availability")
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`)
       .send({
         resourceId: "Room-A",
         startTime: tomorrowAt(12).toISOString(),
@@ -469,18 +467,26 @@ describe("Reservation Vertical Slice: Admin Auth & Expired Cleanup", () => {
     ]);
   });
 
-  it("should reject requests with missing or invalid admin token with 401", async () => {
+  it("should reject missing/invalid tokens with 401 and non-admin tokens with 403", async () => {
     const missing = await request(app)
       .post("/api/admin/cleanup-expired")
       .send();
     expect(missing.status).toBe(401);
     expect(missing.body.error).toBe("UnauthorizedError");
 
-    const wrong = await request(app)
+    const invalid = await request(app)
       .post("/api/admin/cleanup-expired")
-      .set("x-admin-token", "wrong-token")
+      .set("Authorization", "Bearer invalid-token")
       .send();
-    expect(wrong.status).toBe(401);
+    expect(invalid.status).toBe(401);
+    expect(invalid.body.error).toBe("UnauthorizedError");
+
+    const forbidden = await request(app)
+      .post("/api/admin/cleanup-expired")
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`)
+      .send();
+    expect(forbidden.status).toBe(403);
+    expect(forbidden.body.error).toBe("ForbiddenError");
   });
 
   it("should atomically cancel stale DRAFT and PENDING_APPROVAL bookings without touching future or CONFIRMED ones", async () => {
@@ -490,7 +496,6 @@ describe("Reservation Vertical Slice: Admin Auth & Expired Cleanup", () => {
     const futureEnd = new Date(Date.now() + 26 * 60 * 60 * 1000);
 
     await db.insert(reservations).values([
-      // Should be cancelled (stale DRAFT)
       {
         resourceId: "Room-A",
         userId: "U1",
@@ -498,7 +503,6 @@ describe("Reservation Vertical Slice: Admin Auth & Expired Cleanup", () => {
         endTime: pastEnd,
         state: "DRAFT",
       },
-      // Should be cancelled (stale PENDING_APPROVAL)
       {
         resourceId: "VIP_Room-A",
         userId: "U2",
@@ -506,7 +510,6 @@ describe("Reservation Vertical Slice: Admin Auth & Expired Cleanup", () => {
         endTime: pastEnd,
         state: "PENDING_APPROVAL",
       },
-      // Should remain CONFIRMED (past CONFIRMED)
       {
         resourceId: "Room-A",
         userId: "U3",
@@ -514,7 +517,6 @@ describe("Reservation Vertical Slice: Admin Auth & Expired Cleanup", () => {
         endTime: pastEnd,
         state: "CONFIRMED",
       },
-      // Should remain DRAFT (future DRAFT)
       {
         resourceId: "Room-A",
         userId: "U4",
@@ -526,7 +528,7 @@ describe("Reservation Vertical Slice: Admin Auth & Expired Cleanup", () => {
 
     const response = await request(app)
       .post("/api/admin/cleanup-expired")
-      .set("x-admin-token", ADMIN_TOKEN)
+      .set("Authorization", `Bearer ${ADMIN_TOKEN}`)
       .send();
 
     expect(response.status).toBe(200);
@@ -578,7 +580,9 @@ describe("Reservation Vertical Slice: Read Endpoints", () => {
   });
 
   it("should list only active resources", async () => {
-    const response = await request(app).get("/api/resources");
+    const response = await request(app)
+      .get("/api/resources")
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`);
 
     expect(response.status).toBe(200);
     expect(response.body.resources).toHaveLength(2);
@@ -588,22 +592,26 @@ describe("Reservation Vertical Slice: Read Endpoints", () => {
     ]);
   });
 
-  it("should filter reservations by userId and state", async () => {
-    const byUser = await request(app).get("/api/reservations?userId=Student1");
+  it("should filter reservations by userId (student) and state (admin)", async () => {
+    const byUser = await request(app)
+      .get("/api/reservations?userId=Student1")
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`);
     expect(byUser.status).toBe(200);
     expect(byUser.body.reservations).toHaveLength(1);
     expect(byUser.body.reservations[0].userId).toBe("Student1");
 
-    const byState = await request(app).get(
-      "/api/reservations?state=PENDING_APPROVAL",
-    );
+    const byState = await request(app)
+      .get("/api/reservations?state=PENDING_APPROVAL")
+      .set("Authorization", `Bearer ${ADMIN_TOKEN}`);
     expect(byState.status).toBe(200);
     expect(byState.body.reservations).toHaveLength(1);
     expect(byState.body.reservations[0].resourceId).toBe("VIP_Room-A");
   });
 
   it("should reject an invalid state filter with 422", async () => {
-    const response = await request(app).get("/api/reservations?state=UNKNOWN");
+    const response = await request(app)
+      .get("/api/reservations?state=UNKNOWN")
+      .set("Authorization", `Bearer ${STUDENT_TOKEN}`);
     expect(response.status).toBe(422);
     expect(response.body.error).toBe("Validation Error");
   });
