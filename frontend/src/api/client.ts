@@ -6,6 +6,7 @@ import type {
   Reservation,
   ReservationState,
   Resource,
+  RoomScheduleResponse,
   UserRole,
 } from "../types/reservation";
 
@@ -125,4 +126,9 @@ export const reservationApi = {
     apiRequest<{ cancelledCount: number }>("/api/admin/cleanup-expired", {
       method: "POST",
     }),
+
+  getRoomSchedule: (resourceId: string, date: string) =>
+    apiRequest<RoomScheduleResponse>(
+      `/api/resources/${encodeURIComponent(resourceId)}/schedule?date=${encodeURIComponent(date)}`,
+    ),
 };

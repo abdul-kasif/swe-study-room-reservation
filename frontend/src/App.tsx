@@ -1,7 +1,8 @@
-import { AuthProvider, useAuth } from "./context/AuthContext";
-import { LoginPage } from "./components/LoginPage";
-import { StudentPortal } from "./components/StudentPortal";
-import { AdminPortal } from "./components/AdminPortal";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { Topbar } from "@/components/layout/Topbar";
+import { LoginPage } from "@/components/auth/LoginPage";
+import { StudentPortal } from "@/components/student/StudentPortal";
+import { AdminPortal } from "@/components/admin/AdminPortal";
 
 function AuthenticatedShell() {
   const { user, logout } = useAuth();
@@ -11,24 +12,9 @@ function AuthenticatedShell() {
   }
 
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div className="topbar-brand">
-          <span>Study Room Reservation System</span>
-          <span className={`badge badge-${user.role}`}>{user.role}</span>
-        </div>
-
-        <div className="topbar-user">
-          <span>
-            {user.fullName} (<strong>{user.username}</strong>)
-          </span>
-          <button type="button" className="btn" onClick={logout}>
-            Sign out
-          </button>
-        </div>
-      </header>
-
-      <main className="container">
+    <div className="min-h-screen bg-slate-50">
+      <Topbar user={user} onLogout={logout} />
+      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
         {user.role === "ADMIN" ? <AdminPortal /> : <StudentPortal />}
       </main>
     </div>

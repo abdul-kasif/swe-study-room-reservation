@@ -42,3 +42,14 @@ export interface CheckAvailabilityPayload {
   startTime: string;
   endTime: string;
 }
+
+export interface BookedSlot {
+  startTime: string;
+  endTime: string;
+}
+
+export interface RoomScheduleResponse {
+  resourceId: string;
+  date: string;
+  bookedSlots: BookedSlot[];
+}
