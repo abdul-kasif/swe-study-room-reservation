@@ -1,5 +1,6 @@
 import { useEffect, useState, type SubmitEvent } from "react";
 import { reservationApi } from "../api/client";
+import { useAuth } from "../context/AuthContext";
 import type {
   AvailabilityStatus,
   Reservation,
@@ -17,10 +18,10 @@ function formatDateTime(iso: string): string {
 }
 
 export function StudentPortal() {
+  const { user } = useAuth();
   const [resources, setResources] = useState<Resource[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
 
-  const [userId, setUserId] = useState("student1");
   const [resourceId, setResourceId] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
@@ -32,24 +33,9 @@ export function StudentPortal() {
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Load active rooms on mount
-  useEffect(() => {
-    reservationApi
-      .getResources()
-      .then((list) => {
-        setResources(list);
-        if (list.length > 0) setResourceId(list[0].resourceId);
-      })
-      .catch((err) => setError(err.message));
-  }, []);
-
-  const loadReservations = async (targetUserId = userId) => {
-    if (!targetUserId.trim()) return;
-    setError(null);
+  const loadReservations = async () => {
     try {
-      const list = await reservationApi.listReservations({
-        userId: targetUserId.trim(),
-      });
+      const list = await reservationApi.listReservations();
       setReservations(list);
     } catch (err) {
       setError(
@@ -58,9 +44,16 @@ export function StudentPortal() {
     }
   };
 
-  // Load initial user's reservations on mount
   useEffect(() => {
-    loadReservations("student1");
+    reservationApi
+      .getResources()
+      .then((list) => {
+        setResources(list);
+        if (list.length > 0) setResourceId(list[0].resourceId);
+      })
+      .catch((err) => setError(err.message));
+
+    loadReservations();
   }, []);
 
   const clearFeedback = () => {
@@ -103,12 +96,11 @@ export function StudentPortal() {
     try {
       await reservationApi.createReservation({
         resourceId,
-        userId: userId.trim(),
         startTime: new Date(startTime).toISOString(),
         endTime: new Date(endTime).toISOString(),
       });
-      setSuccess("Draft reservation created.");
-      await loadReservations(userId);
+      setSuccess("Draft reservation created. Confirm it to lock in your slot.");
+      await loadReservations();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create draft");
     } finally {
@@ -120,8 +112,8 @@ export function StudentPortal() {
     clearFeedback();
     try {
       const result = await reservationApi.confirmReservation(id);
-      setSuccess(`Reservation #${id} is now ${result.state}.`);
-      await loadReservations(userId);
+      setSuccess(`Reservation #${id} updated to ${result.state}.`);
+      await loadReservations();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Confirmation failed");
     }
@@ -132,143 +124,88 @@ export function StudentPortal() {
     try {
       await reservationApi.cancelReservation(id);
       setSuccess(`Reservation #${id} cancelled.`);
-      await loadReservations(userId);
+      await loadReservations();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Cancellation failed");
     }
   };
 
   return (
-    <div
-      style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr", gap: "2rem" }}
-    >
-      {/* Left Column: Booking Form */}
-      <section
-        style={{
-          border: "1px solid #ddd",
-          borderRadius: 8,
-          padding: "1.25rem",
-        }}
-      >
-        <h2 style={{ marginTop: 0 }}>Book a Study Room</h2>
+    <div className="grid-2">
+      {/* Booking Form */}
+      <section className="card">
+        <div className="card-header">
+          <h2 className="card-title">Book a Study Room</h2>
+        </div>
 
-        {error && (
-          <div
-            style={{
-              background: "#fdecea",
-              color: "#b71c1c",
-              padding: "0.75rem",
-              borderRadius: 6,
-              marginBottom: "1rem",
-            }}
-          >
-            {error}
-          </div>
-        )}
-        {success && (
-          <div
-            style={{
-              background: "#e8f5e9",
-              color: "#1b5e20",
-              padding: "0.75rem",
-              borderRadius: 6,
-              marginBottom: "1rem",
-            }}
-          >
-            {success}
-          </div>
-        )}
+        {error && <div className="alert alert-error">{error}</div>}
+        {success && <div className="alert alert-success">{success}</div>}
         {availability && (
           <div
-            style={{
-              background: availability === "AVAILABLE" ? "#e3f2fd" : "#fff3e0",
-              color: availability === "AVAILABLE" ? "#0d47a1" : "#e65100",
-              padding: "0.75rem",
-              borderRadius: 6,
-              marginBottom: "1rem",
-            }}
+            className={`alert ${availability === "AVAILABLE" ? "alert-info" : "alert-warning"}`}
           >
             Slot Status: <strong>{availability}</strong>
           </div>
         )}
 
-        <form
-          onSubmit={handleCreateDraft}
-          style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}
-        >
-          <label>
-            <div>
-              <strong>User ID</strong>
-            </div>
-            <input
-              type="text"
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
-              required
-              style={{ width: "100%", padding: "0.5rem", marginTop: 4 }}
-            />
-          </label>
-
-          <label>
-            <div>
-              <strong>Study Room</strong>
-            </div>
+        <form onSubmit={handleCreateDraft} className="form-stack">
+          <div className="field">
+            <label htmlFor="room">Study Room</label>
             <select
+              id="room"
+              className="select"
               value={resourceId}
               onChange={(e) => setResourceId(e.target.value)}
               required
-              style={{ width: "100%", padding: "0.5rem", marginTop: 4 }}
             >
               {resources.map((r) => (
                 <option key={r.resourceId} value={r.resourceId}>
                   {r.name} ({r.resourceId})
-                  {r.resourceId.startsWith("VIP_")
-                    ? " — Requires Approval"
-                    : ""}
+                  {r.resourceId.startsWith("VIP_") ? " — VIP Approval" : ""}
                 </option>
               ))}
             </select>
-          </label>
+          </div>
 
-          <label>
-            <div>
-              <strong>Start Time</strong>
-            </div>
+          <div className="field">
+            <label htmlFor="startTime">Start Time</label>
             <input
+              id="startTime"
+              className="input"
               type="datetime-local"
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
               required
-              style={{ width: "100%", padding: "0.5rem", marginTop: 4 }}
             />
-          </label>
+          </div>
 
-          <label>
-            <div>
-              <strong>End Time</strong>
-            </div>
+          <div className="field">
+            <label htmlFor="endTime">End Time</label>
             <input
+              id="endTime"
+              className="input"
               type="datetime-local"
               value={endTime}
               onChange={(e) => setEndTime(e.target.value)}
               required
-              style={{ width: "100%", padding: "0.5rem", marginTop: 4 }}
             />
-          </label>
+          </div>
 
-          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+          <div className="btn-row" style={{ marginTop: "0.25rem" }}>
             <button
               type="button"
+              className="btn"
               onClick={handleCheckAvailability}
               disabled={loading}
-              style={{ flex: 1, padding: "0.6rem" }}
+              style={{ flex: 1 }}
             >
-              Check Availability
+              Check Slot
             </button>
             <button
               type="submit"
+              className="btn btn-primary"
               disabled={loading}
-              style={{ flex: 1, padding: "0.6rem", fontWeight: "bold" }}
+              style={{ flex: 1 }}
             >
               Create Draft
             </button>
@@ -276,79 +213,60 @@ export function StudentPortal() {
         </form>
       </section>
 
-      {/* Right Column: Reservation List */}
-      <section
-        style={{
-          border: "1px solid #ddd",
-          borderRadius: 8,
-          padding: "1.25rem",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "1rem",
-          }}
-        >
-          <h2 style={{ margin: 0 }}>My Reservations ({userId})</h2>
-          <button type="button" onClick={() => loadReservations(userId)}>
+      {/* Reservations List */}
+      <section className="card">
+        <div className="card-header">
+          <h2 className="card-title">My Reservations ({user?.username})</h2>
+          <button type="button" className="btn" onClick={loadReservations}>
             Refresh
           </button>
         </div>
 
         {reservations.length === 0 ? (
-          <p style={{ color: "#666" }}>No reservations found for this user.</p>
+          <p style={{ color: "var(--muted)", margin: 0 }}>
+            No reservations yet. Create a draft on the left to get started.
+          </p>
         ) : (
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
-          >
+          <div className="item-list">
             {reservations.map((res) => (
-              <div
-                key={res.id}
-                style={{
-                  border: "1px solid #e0e0e0",
-                  borderRadius: 6,
-                  padding: "0.85rem",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
+              <div key={res.id} className="item-row">
                 <div>
-                  <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                    }}
+                  >
                     <strong>
                       #{res.id} — {res.resourceId}
-                    </strong>{" "}
-                    <span
-                      style={{
-                        fontSize: "0.8rem",
-                        padding: "0.15rem 0.5rem",
-                        borderRadius: 4,
-                        background: "#eee",
-                        marginLeft: 6,
-                      }}
-                    >
+                    </strong>
+                    <span className={`badge badge-${res.state}`}>
                       {res.state}
                     </span>
                   </div>
-                  <div
-                    style={{ fontSize: "0.85rem", color: "#555", marginTop: 4 }}
-                  >
+                  <div className="item-meta">
                     {formatDateTime(res.startTime)} →{" "}
                     {formatDateTime(res.endTime)}
                   </div>
                 </div>
 
-                <div style={{ display: "flex", gap: "0.5rem" }}>
+                <div className="btn-row">
                   {res.state === "DRAFT" && (
-                    <button type="button" onClick={() => handleConfirm(res.id)}>
+                    <button
+                      type="button"
+                      className="btn btn-success"
+                      onClick={() => handleConfirm(res.id)}
+                    >
                       Confirm
                     </button>
                   )}
                   {res.state !== "CANCELLED" && (
-                    <button type="button" onClick={() => handleCancel(res.id)}>
+                    <button
+                      type="button"
+                      className="btn btn-danger-outline"
+                      onClick={() => handleCancel(res.id)}
+                    >
                       Cancel
                     </button>
                   )}

@@ -1,62 +1,45 @@
-import { useState } from "react";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import { LoginPage } from "./components/LoginPage";
 import { StudentPortal } from "./components/StudentPortal";
 import { AdminPortal } from "./components/AdminPortal";
 
-type PortalTab = "student" | "admin";
+function AuthenticatedShell() {
+  const { user, logout } = useAuth();
 
-export function App() {
-  const [activeTab, setActiveTab] = useState<PortalTab>("student");
+  if (!user) {
+    return <LoginPage />;
+  }
 
   return (
-    <div
-      style={{
-        maxWidth: 1100,
-        margin: "0 auto",
-        padding: "1.5rem",
-        fontFamily: "system-ui, sans-serif",
-      }}
-    >
-      <header
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          borderBottom: "1px solid #ddd",
-          paddingBottom: "1rem",
-          marginBottom: "1.5rem",
-        }}
-      >
-        <h1 style={{ margin: 0, fontSize: "1.5rem" }}>
-          Study Room Reservation System
-        </h1>
-        <nav style={{ display: "flex", gap: "0.5rem" }}>
-          <button
-            type="button"
-            onClick={() => setActiveTab("student")}
-            style={{
-              padding: "0.5rem 1rem",
-              fontWeight: activeTab === "student" ? "bold" : "normal",
-            }}
-          >
-            Student Portal
+    <div className="app-shell">
+      <header className="topbar">
+        <div className="topbar-brand">
+          <span>Study Room Reservation System</span>
+          <span className={`badge badge-${user.role}`}>{user.role}</span>
+        </div>
+
+        <div className="topbar-user">
+          <span>
+            {user.fullName} (<strong>{user.username}</strong>)
+          </span>
+          <button type="button" className="btn" onClick={logout}>
+            Sign out
           </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("admin")}
-            style={{
-              padding: "0.5rem 1rem",
-              fontWeight: activeTab === "admin" ? "bold" : "normal",
-            }}
-          >
-            Admin Portal
-          </button>
-        </nav>
+        </div>
       </header>
 
-      <main>
-        {activeTab === "student" ? <StudentPortal /> : <AdminPortal />}
+      <main className="container">
+        {user.role === "ADMIN" ? <AdminPortal /> : <StudentPortal />}
       </main>
     </div>
+  );
+}
+
+export function App() {
+  return (
+    <AuthProvider>
+      <AuthenticatedShell />
+    </AuthProvider>
   );
 }
 

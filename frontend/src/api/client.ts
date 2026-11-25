@@ -1,30 +1,42 @@
 import type {
+  AuthResponse,
   AvailabilityStatus,
   CheckAvailabilityPayload,
   CreateReservationPayload,
   Reservation,
   ReservationState,
   Resource,
+  UserRole,
 } from "../types/reservation";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+export const TOKEN_STORAGE_KEY = "study_room_jwt";
 
 async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
+  authenticated = true,
 ): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string>),
+  };
+
+  if (authenticated) {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
+
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
+    headers,
   });
 
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    // Handle both DomainError (string detail) and ZodError (array detail)
     const message = Array.isArray(data.detail)
       ? data.detail.map((e: { message: string }) => e.message).join(", ")
       : data.detail || `Request failed with status ${response.status}`;
@@ -33,6 +45,28 @@ async function apiRequest<T>(
 
   return data as T;
 }
+
+export const authApi = {
+  login: (username: string, password: string, expectedRole: UserRole) =>
+    apiRequest<AuthResponse>(
+      "/api/auth/login",
+      {
+        method: "POST",
+        body: JSON.stringify({ username, password, expectedRole }),
+      },
+      false,
+    ),
+
+  registerStudent: (username: string, fullName: string, password: string) =>
+    apiRequest<AuthResponse>(
+      "/api/auth/register",
+      {
+        method: "POST",
+        body: JSON.stringify({ username, fullName, password }),
+      },
+      false,
+    ),
+};
 
 export const reservationApi = {
   getResources: () =>
@@ -78,24 +112,17 @@ export const reservationApi = {
       { method: "POST" },
     ),
 
-  processApproval: (
-    id: number,
-    adminId: string,
-    decision: "approve" | "reject",
-    adminToken: string,
-  ) =>
+  processApproval: (id: number, decision: "approve" | "reject") =>
     apiRequest<{ id: number; state: ReservationState }>(
       `/api/reservations/${id}/approval`,
       {
         method: "POST",
-        headers: { "x-admin-token": adminToken },
-        body: JSON.stringify({ adminId, decision }),
+        body: JSON.stringify({ decision }),
       },
     ),
 
-  cleanupExpired: (adminToken: string) =>
+  cleanupExpired: () =>
     apiRequest<{ cancelledCount: number }>("/api/admin/cleanup-expired", {
       method: "POST",
-      headers: { "x-admin-token": adminToken },
     }),
 };

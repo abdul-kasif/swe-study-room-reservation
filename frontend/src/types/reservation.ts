@@ -1,3 +1,16 @@
+export type UserRole = "STUDENT" | "ADMIN";
+
+export interface AuthUser {
+  username: string;
+  fullName: string;
+  role: UserRole;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: AuthUser;
+}
+
 export type ReservationState =
   "DRAFT" | "PENDING_APPROVAL" | "CONFIRMED" | "CANCELLED";
 
@@ -20,7 +33,6 @@ export interface Reservation {
 
 export interface CreateReservationPayload {
   resourceId: string;
-  userId: string;
   startTime: string;
   endTime: string;
 }

@@ -12,11 +12,11 @@ function formatDateTime(iso: string): string {
   });
 }
 
-export function AdminPortal() {
-  const [pending, setPending] = useState<Reservation[]>([]);
-  const [adminId, setAdminId] = useState("admin1");
-  const [adminToken, setAdminToken] = useState("");
+type AdminFilter = "PENDING_APPROVAL" | "ALL";
 
+export function AdminPortal() {
+  const [items, setItems] = useState<Reservation[]>([]);
+  const [filter, setFilter] = useState<AdminFilter>("PENDING_APPROVAL");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -26,44 +26,36 @@ export function AdminPortal() {
     setSuccess(null);
   };
 
-  const loadPending = async () => {
+  const loadReservations = async (targetFilter = filter) => {
     setError(null);
     try {
-      const list = await reservationApi.listReservations({
-        state: "PENDING_APPROVAL",
-      });
-      setPending(list);
+      const list = await reservationApi.listReservations(
+        targetFilter === "PENDING_APPROVAL"
+          ? { state: "PENDING_APPROVAL" }
+          : undefined,
+      );
+      setItems(list);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to load pending approvals",
+        err instanceof Error ? err.message : "Failed to load reservations",
       );
     }
   };
 
   useEffect(() => {
-    loadPending();
-  }, []);
+    loadReservations(filter);
+  }, [filter]);
 
   const handleDecision = async (id: number, decision: "approve" | "reject") => {
     clearFeedback();
-    if (!adminToken.trim()) {
-      setError("Please enter the Admin Token first.");
-      return;
-    }
-
     setLoading(true);
     try {
-      const result = await reservationApi.processApproval(
-        id,
-        adminId.trim() || "admin1",
-        decision,
-        adminToken.trim(),
-      );
+      const result = await reservationApi.processApproval(id, decision);
       setSuccess(`Reservation #${id} updated to ${result.state}.`);
-      await loadPending();
+      await loadReservations(filter);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");
-      await loadPending(); // Refresh in case an expired booking auto-cancelled
+      await loadReservations(filter);
     } finally {
       setLoading(false);
     }
@@ -71,20 +63,13 @@ export function AdminPortal() {
 
   const handleCleanupExpired = async () => {
     clearFeedback();
-    if (!adminToken.trim()) {
-      setError("Please enter the Admin Token first.");
-      return;
-    }
-
     setLoading(true);
     try {
-      const { cancelledCount } = await reservationApi.cleanupExpired(
-        adminToken.trim(),
-      );
+      const { cancelledCount } = await reservationApi.cleanupExpired();
       setSuccess(
         `Cleanup complete: ${cancelledCount} stale reservation(s) cancelled.`,
       );
-      await loadPending();
+      await loadReservations(filter);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Cleanup failed");
     } finally {
@@ -94,159 +79,125 @@ export function AdminPortal() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      {/* Top Bar: Admin Credentials & Maintenance */}
+      {/* Maintenance Bar */}
       <section
+        className="card"
         style={{
-          border: "1px solid #ddd",
-          borderRadius: 8,
-          padding: "1.25rem",
           display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
           flexWrap: "wrap",
           gap: "1rem",
-          alignItems: "flex-end",
-          justifyContent: "space-between",
         }}
       >
-        <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-          <label>
-            <div>
-              <strong>Admin ID</strong>
-            </div>
-            <input
-              type="text"
-              value={adminId}
-              onChange={(e) => setAdminId(e.target.value)}
-              style={{ padding: "0.5rem", marginTop: 4 }}
-            />
-          </label>
-
-          <label>
-            <div>
-              <strong>Admin Token (X-Admin-Token)</strong>
-            </div>
-            <input
-              type="password"
-              value={adminToken}
-              onChange={(e) => setAdminToken(e.target.value)}
-              placeholder="Enter ADMIN_TOKEN"
-              style={{ padding: "0.5rem", marginTop: 4, minWidth: 220 }}
-            />
-          </label>
+        <div>
+          <h2 className="card-title">Admin Operations</h2>
+          <div className="item-meta">
+            Approve VIP room requests or clear expired drafts and pending
+            bookings.
+          </div>
         </div>
-
         <button
           type="button"
+          className="btn btn-admin"
           onClick={handleCleanupExpired}
           disabled={loading}
-          style={{ padding: "0.6rem 1rem", fontWeight: "bold" }}
         >
           Cleanup Expired Reservations
         </button>
       </section>
 
-      {/* Feedback Banners */}
-      {error && (
-        <div
-          style={{
-            background: "#fdecea",
-            color: "#b71c1c",
-            padding: "0.75rem",
-            borderRadius: 6,
-          }}
-        >
-          {error}
-        </div>
-      )}
-      {success && (
-        <div
-          style={{
-            background: "#e8f5e9",
-            color: "#1b5e20",
-            padding: "0.75rem",
-            borderRadius: 6,
-          }}
-        >
-          {success}
-        </div>
-      )}
+      {error && <div className="alert alert-error">{error}</div>}
+      {success && <div className="alert alert-success">{success}</div>}
 
-      {/* Pending VIP Approvals Queue */}
-      <section
-        style={{
-          border: "1px solid #ddd",
-          borderRadius: 8,
-          padding: "1.25rem",
-        }}
-      >
+      {/* Queue / All Reservations */}
+      <section className="card">
         <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "1rem",
-          }}
+          className="card-header"
+          style={{ flexWrap: "wrap", gap: "0.75rem" }}
         >
-          <h2 style={{ margin: 0 }}>
-            Pending VIP Approvals ({pending.length})
-          </h2>
-          <button type="button" onClick={loadPending} disabled={loading}>
+          <div className="btn-row">
+            <button
+              type="button"
+              className={`btn ${filter === "PENDING_APPROVAL" ? "btn-admin" : ""}`}
+              onClick={() => setFilter("PENDING_APPROVAL")}
+            >
+              Pending VIP Approvals
+            </button>
+            <button
+              type="button"
+              className={`btn ${filter === "ALL" ? "btn-admin" : ""}`}
+              onClick={() => setFilter("ALL")}
+            >
+              All Reservations
+            </button>
+          </div>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => loadReservations(filter)}
+            disabled={loading}
+          >
             Refresh
           </button>
         </div>
 
-        {pending.length === 0 ? (
-          <p style={{ color: "#666" }}>No reservations awaiting approval.</p>
+        {items.length === 0 ? (
+          <p style={{ color: "var(--muted)", margin: 0 }}>
+            {filter === "PENDING_APPROVAL"
+              ? "No reservations awaiting approval."
+              : "No reservations found."}
+          </p>
         ) : (
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
-          >
-            {pending.map((res) => (
-              <div
-                key={res.id}
-                style={{
-                  border: "1px solid #e0e0e0",
-                  borderRadius: 6,
-                  padding: "0.85rem",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
+          <div className="item-list">
+            {items.map((res) => (
+              <div key={res.id} className="item-row">
                 <div>
-                  <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                    }}
+                  >
                     <strong>
                       #{res.id} — {res.resourceId}
-                    </strong>{" "}
-                    <span style={{ color: "#555", marginLeft: 8 }}>
+                    </strong>
+                    <span className={`badge badge-${res.state}`}>
+                      {res.state}
+                    </span>
+                    <span
+                      style={{ fontSize: "0.85rem", color: "var(--muted)" }}
+                    >
                       by <strong>{res.userId}</strong>
                     </span>
                   </div>
-                  <div
-                    style={{ fontSize: "0.85rem", color: "#555", marginTop: 4 }}
-                  >
+                  <div className="item-meta">
                     {formatDateTime(res.startTime)} →{" "}
                     {formatDateTime(res.endTime)}
                   </div>
                 </div>
 
-                <div style={{ display: "flex", gap: "0.5rem" }}>
-                  <button
-                    type="button"
-                    disabled={loading}
-                    onClick={() => handleDecision(res.id, "approve")}
-                    style={{ padding: "0.45rem 0.9rem", fontWeight: "bold" }}
-                  >
-                    Approve
-                  </button>
-                  <button
-                    type="button"
-                    disabled={loading}
-                    onClick={() => handleDecision(res.id, "reject")}
-                    style={{ padding: "0.45rem 0.9rem" }}
-                  >
-                    Reject
-                  </button>
-                </div>
+                {res.state === "PENDING_APPROVAL" && (
+                  <div className="btn-row">
+                    <button
+                      type="button"
+                      className="btn btn-success"
+                      disabled={loading}
+                      onClick={() => handleDecision(res.id, "approve")}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-danger-outline"
+                      disabled={loading}
+                      onClick={() => handleDecision(res.id, "reject")}
+                    >
+                      Reject
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
