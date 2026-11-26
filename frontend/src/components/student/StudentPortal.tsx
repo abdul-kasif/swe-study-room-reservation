@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { reservationApi } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -198,27 +199,52 @@ export function StudentPortal() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
+        <Alert
+          variant="destructive"
+          className="flex items-center justify-between"
+        >
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <AlertDescription>{error}</AlertDescription>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 hover:bg-red-100"
+            onClick={() => setError(null)}
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
         </Alert>
       )}
       {success && (
-        <Alert className="border-emerald-200 bg-emerald-50 text-emerald-900">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-          <AlertDescription>{success}</AlertDescription>
+        <Alert className="flex items-center justify-between border-emerald-200 bg-emerald-50 text-emerald-900">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+            <AlertDescription>{success}</AlertDescription>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 text-emerald-800 hover:bg-emerald-100"
+            onClick={() => setSuccess(null)}
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
         </Alert>
       )}
 
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1.45fr_1fr]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.45fr_1fr] lg:items-stretch">
         {/* Left: Visual Timetable Card */}
-        <Card>
-          <CardHeader>
+        <Card className="flex flex-col">
+          <CardHeader className="flex min-h-[3.5rem] flex-row items-center justify-between space-y-0 pb-4">
             <CardTitle className="text-lg">Book a Study Room</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="flex-1 space-y-6">
             <RoomDateFilter
               resources={resources}
               selectedResourceId={selectedResourceId}
@@ -248,15 +274,18 @@ export function StudentPortal() {
           </CardContent>
         </Card>
 
-        <div className="lg:sticky lg:top-24">
-          <MyReservationsList
-            username={user?.username || ""}
-            resources={resources}
-            reservations={reservations}
-            onRefresh={loadReservations}
-            onConfirm={handleConfirmExisting}
-            onCancel={handleCancelExisting}
-          />
+        {/* Right: Student's Reservations (matches left card height, scrolls internally) */}
+        <div className="relative min-h-[520px] lg:min-h-0">
+          <div className="lg:absolute lg:inset-0">
+            <MyReservationsList
+              username={user?.username || ""}
+              resources={resources}
+              reservations={reservations}
+              onRefresh={loadReservations}
+              onConfirm={handleConfirmExisting}
+              onCancel={handleCancelExisting}
+            />
+          </div>
         </div>
       </div>
     </div>

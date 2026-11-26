@@ -21,13 +21,24 @@ import type {
 
 type StatusFilter = "ALL" | "PENDING_APPROVAL" | "CONFIRMED" | "CANCELLED";
 
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString([], {
+function formatSlotRange(startIso: string, endIso: string): string {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  const datePart = start.toLocaleDateString([], {
     month: "short",
     day: "2-digit",
+  });
+  const startTime = start.toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
   });
+  const endTime = end.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return `${datePart} · ${startTime} – ${endTime}`;
 }
 
 function toLocalDateString(iso: string): string {
@@ -75,13 +86,27 @@ export function MyReservationsList({
   const hasActiveFilters =
     statusFilter !== "ALL" || roomFilter !== "ALL" || dateFilter !== "";
 
-  const filteredReservations = reservations.filter((res) => {
-    const matchesStatus = statusFilter === "ALL" || res.state === statusFilter;
-    const matchesRoom = roomFilter === "ALL" || res.resourceId === roomFilter;
-    const matchesDate =
-      dateFilter === "" || toLocalDateString(res.startTime) === dateFilter;
-    return matchesStatus && matchesRoom && matchesDate;
-  });
+  // Show active bookings before cancelled ones, then newest first
+  const filteredReservations = reservations
+    .filter((res) => {
+      const matchesStatus =
+        statusFilter === "ALL" || res.state === statusFilter;
+      const matchesRoom = roomFilter === "ALL" || res.resourceId === roomFilter;
+      const matchesDate =
+        dateFilter === "" || toLocalDateString(res.startTime) === dateFilter;
+      return matchesStatus && matchesRoom && matchesDate;
+    })
+    .sort((a, b) => {
+      const aCancelled = a.state === "CANCELLED" ? 1 : 0;
+      const bCancelled = b.state === "CANCELLED" ? 1 : 0;
+      if (aCancelled !== bCancelled) return aCancelled - bCancelled;
+      return new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
+    });
+
+  const selectedRoomLabel =
+    roomFilter === "ALL"
+      ? "All Rooms"
+      : resources.find((r) => r.resourceId === roomFilter)?.name || roomFilter;
 
   const clearFilters = () => {
     setStatusFilter("ALL");
@@ -90,8 +115,8 @@ export function MyReservationsList({
   };
 
   return (
-    <Card className="flex flex-col lg:max-h-[calc(100vh-7.5rem)]">
-      <CardHeader className="flex shrink-0 flex-row items-center justify-between space-y-0 pb-4">
+    <Card className="flex h-full flex-col">
+      <CardHeader className="flex min-h-[3.5rem] shrink-0 flex-row items-center justify-between space-y-0 pb-4">
         <CardTitle className="text-lg">My Reservations ({username})</CardTitle>
         <Button type="button" variant="outline" size="sm" onClick={onRefresh}>
           <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
@@ -100,7 +125,7 @@ export function MyReservationsList({
       </CardHeader>
 
       <CardContent className="flex min-h-0 flex-1 flex-col gap-4">
-        {/* Filters (fixed at top of card) */}
+        {/* Filters (pinned at top of card) */}
         <div className="shrink-0 space-y-3 border-b pb-4">
           <Tabs
             value={statusFilter}
@@ -134,7 +159,7 @@ export function MyReservationsList({
               </Label>
               <Select value={roomFilter} onValueChange={setRoomFilter}>
                 <SelectTrigger id="filter-room" className="w-full">
-                  <SelectValue placeholder="All Rooms" />
+                  <SelectValue>{selectedRoomLabel}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">All Rooms</SelectItem>
@@ -184,22 +209,26 @@ export function MyReservationsList({
         </div>
 
         {/* Scrollable Reservations List */}
-        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1.5">
           {reservations.length === 0 ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">
+            <p className="py-8 text-center text-sm text-muted-foreground">
               You have no reservations yet. Select a time slot on the left to
               book a room.
             </p>
           ) : filteredReservations.length === 0 ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">
+            <p className="py-8 text-center text-sm text-muted-foreground">
               No reservations match your active filters.
             </p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               {filteredReservations.map((res) => (
                 <div
                   key={res.id}
-                  className="flex flex-col justify-between gap-3 rounded-lg border p-3.5 sm:flex-row sm:items-center"
+                  className={`flex flex-col justify-between gap-3 rounded-lg border p-3.5 transition-colors sm:flex-row sm:items-center ${
+                    res.state === "CANCELLED"
+                      ? "bg-slate-50/60 opacity-75"
+                      : "bg-white"
+                  }`}
                 >
                   <div className="space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -211,8 +240,7 @@ export function MyReservationsList({
                       </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {formatDateTime(res.startTime)} →{" "}
-                      {formatDateTime(res.endTime)}
+                      {formatSlotRange(res.startTime, res.endTime)}
                     </p>
                   </div>
 
