@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { reservationApi } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { BookedSlot, Reservation, Resource } from "@/types/reservation";
 import { RoomDateFilter } from "./RoomDateFilter";
 import { TimeSlotGrid, buildLocalSlotDate } from "./TimeSlotGrid";
@@ -33,15 +31,13 @@ export function StudentPortal() {
 
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   const loadReservations = async () => {
     try {
       const list = await reservationApi.listReservations();
       setReservations(list);
     } catch (err) {
-      setError(
+      toast.error(
         err instanceof Error ? err.message : "Failed to load reservations",
       );
     }
@@ -54,7 +50,7 @@ export function StudentPortal() {
       const res = await reservationApi.getRoomSchedule(resourceId, date);
       setBookedSlots(res.bookedSlots);
     } catch (err) {
-      setError(
+      toast.error(
         err instanceof Error ? err.message : "Failed to load room schedule",
       );
     } finally {
@@ -62,7 +58,6 @@ export function StudentPortal() {
     }
   };
 
-  // Initial load: rooms + student's reservations
   useEffect(() => {
     reservationApi
       .getResources()
@@ -70,12 +65,11 @@ export function StudentPortal() {
         setResources(list);
         if (list.length > 0) setSelectedResourceId(list[0].resourceId);
       })
-      .catch((err) => setError(err.message));
+      .catch((err) => toast.error(err.message));
 
     loadReservations();
   }, []);
 
-  // Reload schedule whenever room or date changes
   useEffect(() => {
     setSelectedHours([]);
     if (selectedResourceId && selectedDate) {
@@ -84,11 +78,7 @@ export function StudentPortal() {
   }, [selectedResourceId, selectedDate]);
 
   const handleToggleHour = (hour: number) => {
-    setError(null);
-    setSuccess(null);
-
     if (selectedHours.includes(hour)) {
-      // Allow deselecting from either end; if middle clicked, reset to just that hour
       const sorted = [...selectedHours].sort((a, b) => a - b);
       if (hour === sorted[0] || hour === sorted[sorted.length - 1]) {
         setSelectedHours(sorted.filter((h) => h !== hour));
@@ -108,13 +98,12 @@ export function StudentPortal() {
       hour === sorted[0] - 1 || hour === sorted[sorted.length - 1] + 1;
 
     if (!isAdjacent) {
-      // Start a fresh selection at the newly clicked slot
       setSelectedHours([hour]);
       return;
     }
 
     if (selectedHours.length >= 4) {
-      setError("You can select up to 4 contiguous hours per booking.");
+      toast.error("You can select up to 4 contiguous hours per booking.");
       return;
     }
 
@@ -124,8 +113,6 @@ export function StudentPortal() {
   const handleConfirmBooking = async () => {
     if (!selectedResourceId || selectedHours.length === 0) return;
 
-    setError(null);
-    setSuccess(null);
     setSubmitting(true);
 
     const sorted = [...selectedHours].sort((a, b) => a - b);
@@ -144,7 +131,7 @@ export function StudentPortal() {
       const confirmed = await reservationApi.confirmReservation(draft.id);
 
       setSelectedHours([]);
-      setSuccess(
+      toast.success(
         confirmed.state === "PENDING_APPROVAL"
           ? `VIP reservation #${confirmed.id} submitted for Admin approval.`
           : `Reservation #${confirmed.id} confirmed!`,
@@ -154,7 +141,7 @@ export function StudentPortal() {
         loadReservations(),
       ]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Booking failed");
+      toast.error(err instanceof Error ? err.message : "Booking failed");
       await Promise.all([
         loadSchedule(selectedResourceId, selectedDate),
         loadReservations(),
@@ -165,32 +152,28 @@ export function StudentPortal() {
   };
 
   const handleConfirmExisting = async (id: number) => {
-    setError(null);
-    setSuccess(null);
     try {
       const result = await reservationApi.confirmReservation(id);
-      setSuccess(`Reservation #${id} updated to ${result.state}.`);
+      toast.success(`Reservation #${id} updated to ${result.state}.`);
       await Promise.all([
         loadSchedule(selectedResourceId, selectedDate),
         loadReservations(),
       ]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Confirmation failed");
+      toast.error(err instanceof Error ? err.message : "Confirmation failed");
     }
   };
 
   const handleCancelExisting = async (id: number) => {
-    setError(null);
-    setSuccess(null);
     try {
       await reservationApi.cancelReservation(id);
-      setSuccess(`Reservation #${id} cancelled.`);
+      toast.success(`Reservation #${id} cancelled.`);
       await Promise.all([
         loadSchedule(selectedResourceId, selectedDate),
         loadReservations(),
       ]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Cancellation failed");
+      toast.error(err instanceof Error ? err.message : "Cancellation failed");
     }
   };
 
@@ -199,93 +182,53 @@ export function StudentPortal() {
   );
 
   return (
-    <div className="space-y-5">
-      {error && (
-        <Alert
-          variant="destructive"
-          className="flex items-center justify-between"
-        >
-          <div className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <AlertDescription>{error}</AlertDescription>
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0 hover:bg-red-100"
-            onClick={() => setError(null)}
-          >
-            <X className="h-3.5 w-3.5" />
-          </Button>
-        </Alert>
-      )}
-      {success && (
-        <Alert className="flex items-center justify-between border-emerald-200 bg-emerald-50 text-emerald-900">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-            <AlertDescription>{success}</AlertDescription>
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0 text-emerald-800 hover:bg-emerald-100"
-            onClick={() => setSuccess(null)}
-          >
-            <X className="h-3.5 w-3.5" />
-          </Button>
-        </Alert>
-      )}
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.45fr_1fr] lg:items-stretch">
+      {/* Left: Visual Timetable Card */}
+      <Card className="flex flex-col">
+        <CardHeader className="flex min-h-[3.5rem] flex-row items-center justify-between space-y-0 pb-4">
+          <CardTitle className="text-lg">Book a Study Room</CardTitle>
+        </CardHeader>
+        <CardContent className="flex-1 space-y-6">
+          <RoomDateFilter
+            resources={resources}
+            selectedResourceId={selectedResourceId}
+            selectedDate={selectedDate}
+            minDate={today}
+            onResourceChange={setSelectedResourceId}
+            onDateChange={setSelectedDate}
+          />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.45fr_1fr] lg:items-stretch">
-        {/* Left: Visual Timetable Card */}
-        <Card className="flex flex-col">
-          <CardHeader className="flex min-h-[3.5rem] flex-row items-center justify-between space-y-0 pb-4">
-            <CardTitle className="text-lg">Book a Study Room</CardTitle>
-          </CardHeader>
-          <CardContent className="flex-1 space-y-6">
-            <RoomDateFilter
-              resources={resources}
-              selectedResourceId={selectedResourceId}
-              selectedDate={selectedDate}
-              minDate={today}
-              onResourceChange={setSelectedResourceId}
-              onDateChange={setSelectedDate}
-            />
+          <TimeSlotGrid
+            selectedDate={selectedDate}
+            bookedSlots={bookedSlots}
+            selectedHours={selectedHours}
+            loading={scheduleLoading}
+            onToggleHour={handleToggleHour}
+          />
 
-            <TimeSlotGrid
-              selectedDate={selectedDate}
-              bookedSlots={bookedSlots}
-              selectedHours={selectedHours}
-              loading={scheduleLoading}
-              onToggleHour={handleToggleHour}
-            />
+          <BookingSummaryBar
+            resourceId={selectedResourceId}
+            resourceName={selectedResource?.name || selectedResourceId}
+            selectedDate={selectedDate}
+            selectedHours={selectedHours}
+            submitting={submitting}
+            onConfirmBooking={handleConfirmBooking}
+            onClearSelection={() => setSelectedHours([])}
+          />
+        </CardContent>
+      </Card>
 
-            <BookingSummaryBar
-              resourceId={selectedResourceId}
-              resourceName={selectedResource?.name || selectedResourceId}
-              selectedDate={selectedDate}
-              selectedHours={selectedHours}
-              submitting={submitting}
-              onConfirmBooking={handleConfirmBooking}
-              onClearSelection={() => setSelectedHours([])}
-            />
-          </CardContent>
-        </Card>
-
-        {/* Right: Student's Reservations (matches left card height, scrolls internally) */}
-        <div className="relative min-h-[520px] lg:min-h-0">
-          <div className="lg:absolute lg:inset-0">
-            <MyReservationsList
-              username={user?.username || ""}
-              resources={resources}
-              reservations={reservations}
-              onRefresh={loadReservations}
-              onConfirm={handleConfirmExisting}
-              onCancel={handleCancelExisting}
-            />
-          </div>
+      {/* Right: Student's Reservations */}
+      <div className="relative min-h-[520px] lg:min-h-0">
+        <div className="lg:absolute lg:inset-0">
+          <MyReservationsList
+            username={user?.username || ""}
+            resources={resources}
+            reservations={reservations}
+            onRefresh={loadReservations}
+            onConfirm={handleConfirmExisting}
+            onCancel={handleCancelExisting}
+          />
         </div>
       </div>
     </div>

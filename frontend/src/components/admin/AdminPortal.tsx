@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 import { reservationApi } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { Reservation } from "@/types/reservation";
 import { AdminToolbar } from "./AdminToolbar";
 import { ReservationCard } from "./ReservationCard";
@@ -14,12 +14,9 @@ type AdminFilter = "PENDING_APPROVAL" | "ALL";
 export function AdminPortal() {
   const [items, setItems] = useState<Reservation[]>([]);
   const [filter, setFilter] = useState<AdminFilter>("PENDING_APPROVAL");
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const loadReservations = async (targetFilter = filter) => {
-    setError(null);
     try {
       const list = await reservationApi.listReservations(
         targetFilter === "PENDING_APPROVAL"
@@ -28,7 +25,7 @@ export function AdminPortal() {
       );
       setItems(list);
     } catch (err) {
-      setError(
+      toast.error(
         err instanceof Error ? err.message : "Failed to load reservations",
       );
     }
@@ -39,15 +36,13 @@ export function AdminPortal() {
   }, [filter]);
 
   const handleDecision = async (id: number, decision: "approve" | "reject") => {
-    setError(null);
-    setSuccess(null);
     setLoading(true);
     try {
       const result = await reservationApi.processApproval(id, decision);
-      setSuccess(`Reservation #${id} updated to ${result.state}.`);
+      toast.success(`Reservation #${id} updated to ${result.state}.`);
       await loadReservations(filter);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Action failed");
+      toast.error(err instanceof Error ? err.message : "Action failed");
       await loadReservations(filter);
     } finally {
       setLoading(false);
@@ -55,17 +50,15 @@ export function AdminPortal() {
   };
 
   const handleCleanupExpired = async () => {
-    setError(null);
-    setSuccess(null);
     setLoading(true);
     try {
       const { cancelledCount } = await reservationApi.cleanupExpired();
-      setSuccess(
+      toast.success(
         `Cleanup complete: ${cancelledCount} stale reservation(s) cancelled.`,
       );
       await loadReservations(filter);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Cleanup failed");
+      toast.error(err instanceof Error ? err.message : "Cleanup failed");
     } finally {
       setLoading(false);
     }
@@ -74,19 +67,6 @@ export function AdminPortal() {
   return (
     <div className="space-y-6">
       <AdminToolbar loading={loading} onCleanupExpired={handleCleanupExpired} />
-
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-      {success && (
-        <Alert className="border-emerald-200 bg-emerald-50 text-emerald-900">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-          <AlertDescription>{success}</AlertDescription>
-        </Alert>
-      )}
 
       <Card>
         <CardHeader className="flex flex-col justify-between gap-3 space-y-0 pb-4 sm:flex-row sm:items-center">

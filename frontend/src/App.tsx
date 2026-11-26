@@ -1,3 +1,4 @@
+import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { Topbar } from "@/components/layout/Topbar";
 import { LoginPage } from "@/components/auth/LoginPage";
@@ -25,6 +26,7 @@ export function App() {
   return (
     <AuthProvider>
       <AuthenticatedShell />
+      <Toaster richColors position="bottom-right" duration={4000} />
     </AuthProvider>
   );
 }
